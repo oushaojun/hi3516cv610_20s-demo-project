@@ -1,0 +1,22 @@
+# CMake 构建产物
+build/
+output/
+
+# 编辑器
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# 编译中间产物
+*.o
+*.a
+*.so
+*.obj
+
+# 可执行文件 (不在 src 源码中的)
+*.out
+
+# 私有配置 (本地覆盖 SDK 路径等)
+cmake/local_config.cmake
