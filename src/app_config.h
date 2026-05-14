@@ -27,6 +27,7 @@
 #define APP_SNS_TYPE       SENSOR0_TYPE
 #define APP_VI_WIDTH       2560           /* VI 输入宽度 (匹配传感器) */
 #define APP_VI_HEIGHT      1440           /* VI 输入高度 */
+#define APP_SENSOR_FPS     30             /* 传感器原生帧率 (SC4336P, /proc/umap/vi 实测为30) */
 
 /* ====================================================================
  *  编码通道数量 (1 ~ 3)
@@ -42,7 +43,7 @@
 #define APP_VENC0_TYPE      OT_PT_H264
 #define APP_VENC0_WIDTH     1920
 #define APP_VENC0_HEIGHT    1080
-#define APP_VENC0_FPS       25
+#define APP_VENC0_FPS       15
 #define APP_VENC0_GOP       100
 #define APP_VENC0_BITRATE   4096        /* Kbps */
 #define APP_VENC0_RC_MODE   SAMPLE_RC_CBR
@@ -93,6 +94,8 @@
 #define APP_VPSS_CHN0_PIX_FMT   OT_PIXEL_FORMAT_YVU_SEMIPLANAR_420
 #define APP_VPSS_CHN0_COMPRESS  OT_COMPRESS_MODE_SEG_COMPACT
 #define APP_VPSS_CHN0_DEPTH     0
+#define APP_VPSS_CHN0_SRC_FPS   APP_SENSOR_FPS
+#define APP_VPSS_CHN0_DST_FPS   APP_VENC0_FPS
 
 /* VPSS chn1 — 子码流1 */
 #define APP_VPSS_CHN1_W         640
@@ -100,6 +103,8 @@
 #define APP_VPSS_CHN1_PIX_FMT   OT_PIXEL_FORMAT_YVU_SEMIPLANAR_420
 #define APP_VPSS_CHN1_COMPRESS  OT_COMPRESS_MODE_NONE
 #define APP_VPSS_CHN1_DEPTH     0
+#define APP_VPSS_CHN1_SRC_FPS   APP_SENSOR_FPS
+#define APP_VPSS_CHN1_DST_FPS   APP_VENC1_FPS
 
 /* VPSS chn2 — 子码流2 */
 #define APP_VPSS_CHN2_W         640
@@ -107,6 +112,8 @@
 #define APP_VPSS_CHN2_PIX_FMT   OT_PIXEL_FORMAT_YVU_SEMIPLANAR_420
 #define APP_VPSS_CHN2_COMPRESS  OT_COMPRESS_MODE_NONE
 #define APP_VPSS_CHN2_DEPTH     0
+#define APP_VPSS_CHN2_SRC_FPS   APP_SENSOR_FPS
+#define APP_VPSS_CHN2_DST_FPS   APP_VENC2_FPS
 
 /* ====================================================================
  *  输出文件前缀

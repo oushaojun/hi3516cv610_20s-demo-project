@@ -55,6 +55,8 @@ typedef struct {
     ot_pixel_format    vpss_pix_fmt;
     ot_compress_mode   vpss_compress;
     td_u32             vpss_depth;
+    td_u32             vpss_src_fps;   /**< VPSS chn 源帧率 (= APP_SENSOR_FPS) */
+    td_u32             vpss_dst_fps;   /**< VPSS chn 目标帧率 (= APP_VENCx_FPS) */
     /* 输出 */
     const td_char     *file_prefix;
 } app_chn_cfg_t;
@@ -66,6 +68,7 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
         APP_VENC0_RC_MODE, APP_VENC0_PROFILE, APP_VENC0_GOP_MODE,
         APP_VPSS_CHN0_W, APP_VPSS_CHN0_H,
         APP_VPSS_CHN0_PIX_FMT, APP_VPSS_CHN0_COMPRESS, APP_VPSS_CHN0_DEPTH,
+        APP_VPSS_CHN0_SRC_FPS, APP_VPSS_CHN0_DST_FPS,
         APP_FILE_PREFIX0
     },
     {
@@ -74,6 +77,7 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
         APP_VENC1_RC_MODE, APP_VENC1_PROFILE, APP_VENC1_GOP_MODE,
         APP_VPSS_CHN1_W, APP_VPSS_CHN1_H,
         APP_VPSS_CHN1_PIX_FMT, APP_VPSS_CHN1_COMPRESS, APP_VPSS_CHN1_DEPTH,
+        APP_VPSS_CHN1_SRC_FPS, APP_VPSS_CHN1_DST_FPS,
         APP_FILE_PREFIX1
     },
     {
@@ -82,6 +86,7 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
         APP_VENC2_RC_MODE, APP_VENC2_PROFILE, APP_VENC2_GOP_MODE,
         APP_VPSS_CHN2_W, APP_VPSS_CHN2_H,
         APP_VPSS_CHN2_PIX_FMT, APP_VPSS_CHN2_COMPRESS, APP_VPSS_CHN2_DEPTH,
+        APP_VPSS_CHN2_SRC_FPS, APP_VPSS_CHN2_DST_FPS,
         APP_FILE_PREFIX2
     },
 };
@@ -220,6 +225,8 @@ static td_s32 app_run(td_void)
         chn_attr.pixel_format   = g_chn_cfg[chn].vpss_pix_fmt;
         chn_attr.compress_mode  = g_chn_cfg[chn].vpss_compress;
         chn_attr.depth          = g_chn_cfg[chn].vpss_depth;
+        chn_attr.src_frame_rate = (td_s32)g_chn_cfg[chn].vpss_src_fps;
+        chn_attr.dst_frame_rate = (td_s32)g_chn_cfg[chn].vpss_dst_fps;
         ret = media_vpss_set_chn(0, (ot_vpss_chn)chn, &chn_attr);
         if (ret != TD_SUCCESS) { goto EXIT_VPSS; }
         ret = media_vpss_enable_chn(0, (ot_vpss_chn)chn);

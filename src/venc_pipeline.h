@@ -85,6 +85,8 @@ typedef struct {
     ot_pixel_format     pixel_format;   /**< 像素格式，通常 YVU_SEMIPLANAR_420 */
     ot_compress_mode    compress_mode;  /**< 压缩模式，chn0 建议 SEG_COMPACT */
     td_u32              depth;          /**< 队列深度，0 = 默认 */
+    td_s32              src_frame_rate; /**< 源帧率 (传感器实际输出), -1=auto */
+    td_s32              dst_frame_rate; /**< 目标帧率 (与 VENC FPS 关联), -1=auto */
 } media_vpss_chn_attr;
 
 /** VPSS 组属性 */

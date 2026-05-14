@@ -150,8 +150,8 @@ td_s32 media_vpss_set_chn(ot_vpss_grp grp, ot_vpss_chn chn, const media_vpss_chn
     chn_attr.chn_mode         = OT_VPSS_CHN_MODE_USER;
     chn_attr.compress_mode    = attr->compress_mode;
     chn_attr.pixel_format     = attr->pixel_format;
-    chn_attr.frame_rate.src_frame_rate = -1;
-    chn_attr.frame_rate.dst_frame_rate = -1;
+    chn_attr.frame_rate.src_frame_rate = attr->src_frame_rate;
+    chn_attr.frame_rate.dst_frame_rate = attr->dst_frame_rate;
     chn_attr.depth            = attr->depth;
     chn_attr.mirror_en        = TD_FALSE;
     chn_attr.flip_en          = TD_FALSE;
@@ -210,8 +210,10 @@ td_void media_vpss_stop_grp(ot_vpss_grp grp, const td_bool *chn_en, td_u32 chn_c
 
 td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
 {
-    sample_comm_venc_chn_param param    = { 0 };
-    ot_venc_gop_attr           gop_attr = { 0 };
+    td_s32                     ret;
+    sample_comm_venc_chn_param param       = { 0 };
+    ot_venc_gop_attr           gop_attr    = { 0 };
+    ot_venc_start_param        start_param;
 
     if (attr == TD_NULL) {
         printf("[MEDIA] venc chn attr is null!\n");
@@ -229,11 +231,71 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
     param.rc_mode              = attr->rc_mode;
     param.profile              = attr->profile;
     param.is_rcn_ref_share_buf = TD_TRUE;
-    /* 注意: 码率(bitrate)由 sample_comm 层按分辨率自动计算。
-     * 如需精细码率控制, 需绕过 sample_comm_venc_start,
-     * 直接调用 ss_mpi_venc_create_chn 并手动填充 ot_venc_rc_attr。 */
 
-    return sample_comm_venc_start(chn, &param);
+    /* step 1: create VENC channel (sample_comm_venc_create 做 create_chn + close_reencode) */
+    ret = sample_comm_venc_create(chn, &param);
+    if (ret != TD_SUCCESS) {
+        printf("[MEDIA] VENC chn%u create failed: 0x%x\n", chn, ret);
+        return ret;
+    }
+
+    /* step 2: set VUI timing (修正 ffprobe 读到的帧率)
+     *  H.264: fps = time_scale / (2 * num_units_in_tick) */
+    if (attr->type == OT_PT_H264) {
+        ot_venc_h264_vui vui;
+        ret = ss_mpi_venc_get_h264_vui(chn, &vui);
+        if (ret != TD_SUCCESS) {
+            printf("[MEDIA] VENC chn%u get_h264_vui failed: 0x%x\n", chn, ret);
+            ss_mpi_venc_destroy_chn(chn);
+            return ret;
+        }
+        vui.vui_time_info.timing_info_present_flag = 1;
+        vui.vui_time_info.fixed_frame_rate_flag     = 1;
+        vui.vui_time_info.num_units_in_tick          = 1;
+        /* H.264 progressive: fps = time_scale / (2 * num_units_in_tick) */
+        vui.vui_time_info.time_scale                 = attr->frame_rate * 2;
+        ret = ss_mpi_venc_set_h264_vui(chn, &vui);
+        if (ret != TD_SUCCESS) {
+            printf("[MEDIA] VENC chn%u set_h264_vui failed: 0x%x\n", chn, ret);
+            ss_mpi_venc_destroy_chn(chn);
+            return ret;
+        }
+        printf("[MEDIA] VENC chn%u H.264 VUI: time_scale=%u -> %ufps\n",
+               chn, vui.vui_time_info.time_scale, attr->frame_rate);
+    } else if (attr->type == OT_PT_H265) {
+        ot_venc_h265_vui vui;
+        ret = ss_mpi_venc_get_h265_vui(chn, &vui);
+        if (ret != TD_SUCCESS) {
+            printf("[MEDIA] VENC chn%u get_h265_vui failed: 0x%x\n", chn, ret);
+            ss_mpi_venc_destroy_chn(chn);
+            return ret;
+        }
+        vui.vui_time_info.timing_info_present_flag = 1;
+        vui.vui_time_info.num_units_in_tick        = 1;
+        /* H.265: fps = time_scale / ((num_ticks_poc_diff_one_minus1+1) * num_units_in_tick)
+         *  VENC 实际 POC 间隔为 1, 故 num_ticks_poc_diff_one_minus1 = 0 */
+        vui.vui_time_info.time_scale               = attr->frame_rate;
+        vui.vui_time_info.num_ticks_poc_diff_one_minus1 = 0;
+        ret = ss_mpi_venc_set_h265_vui(chn, &vui);
+        if (ret != TD_SUCCESS) {
+            printf("[MEDIA] VENC chn%u set_h265_vui failed: 0x%x\n", chn, ret);
+            ss_mpi_venc_destroy_chn(chn);
+            return ret;
+        }
+        printf("[MEDIA] VENC chn%u H.265 VUI: time_scale=%u -> %ufps\n",
+               chn, vui.vui_time_info.time_scale, attr->frame_rate);
+    }
+
+    /* step 3: start encoding */
+    start_param.recv_pic_num = -1;
+    ret = ss_mpi_venc_start_chn(chn, &start_param);
+    if (ret != TD_SUCCESS) {
+        printf("[MEDIA] VENC chn%u start_chn failed: 0x%x\n", chn, ret);
+        ss_mpi_venc_destroy_chn(chn);
+        return ret;
+    }
+
+    return TD_SUCCESS;
 }
 
 td_s32 media_venc_stop(ot_venc_chn chn)
