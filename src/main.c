@@ -168,8 +168,12 @@ static td_void app_print_banner(td_void)
                chn, type_str,
                g_chn_cfg[chn].width, g_chn_cfg[chn].height,
                g_chn_cfg[chn].fps,
-               g_chn_cfg[chn].rc_mode == SAMPLE_RC_CBR ? "CBR" :
-               g_chn_cfg[chn].rc_mode == SAMPLE_RC_VBR ? "VBR" : "RC?",
+               g_chn_cfg[chn].rc_mode == SAMPLE_RC_CBR  ? "CBR"  :
+               g_chn_cfg[chn].rc_mode == SAMPLE_RC_VBR  ? "VBR"  :
+               g_chn_cfg[chn].rc_mode == SAMPLE_RC_AVBR ? "AVBR" :
+               g_chn_cfg[chn].rc_mode == SAMPLE_RC_QVBR ? "QVBR" :
+               g_chn_cfg[chn].rc_mode == SAMPLE_RC_CVBR ? "CVBR" :
+               g_chn_cfg[chn].rc_mode == SAMPLE_RC_ABR  ? "ABR"  : "RC?",
                g_chn_cfg[chn].bitrate);
     }
     printf("========================================\n");

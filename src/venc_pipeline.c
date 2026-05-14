@@ -220,13 +220,18 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
         return TD_FAILURE;
     }
 
-    gop_attr.gop_mode = attr->gop_mode;
+    /* 获取 GOP 属性 (含各模式的子结构参数) */
+    ret = sample_comm_venc_get_gop_attr(attr->gop_mode, &gop_attr);
+    if (ret != TD_SUCCESS) {
+        printf("[MEDIA] unsupported gop mode: %d\n", attr->gop_mode);
+        return TD_FAILURE;
+    }
 
     param.type                 = attr->type;
     param.size                 = sample_comm_sys_get_pic_enum(&attr->size);
     param.frame_rate           = attr->frame_rate;
     param.gop                  = attr->gop;
-    param.stats_time           = 1;
+    param.stats_time           = (attr->gop/attr->frame_rate)?(attr->gop/attr->frame_rate):1;
     param.gop_attr             = gop_attr;
     param.rc_mode              = attr->rc_mode;
     param.profile              = attr->profile;
@@ -239,7 +244,110 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
         return ret;
     }
 
-    /* step 2: set VUI timing (修正 ffprobe 读到的帧率)
+    /* step 2: set RC param (max_qp/min_qp 等, SDK sample 层未设) */
+    {
+        ot_venc_rc_param rc_param;
+        ret = ss_mpi_venc_get_rc_param(chn, &rc_param);
+        if (ret != TD_SUCCESS) {
+            printf("[MEDIA] VENC chn%u get_rc_param failed: 0x%x\n", chn, ret);
+            ss_mpi_venc_destroy_chn(chn);
+            return ret;
+        }
+
+        if (attr->type == OT_PT_H264) {
+            switch (attr->rc_mode) {
+            case SAMPLE_RC_ABR:
+                rc_param.h264_abr_param.max_p_qp  = 51;
+                rc_param.h264_abr_param.min_p_qp  = 15;
+                rc_param.h264_abr_param.max_i_qp  = 40;
+                rc_param.h264_abr_param.min_i_qp  = 15;
+                break;
+            case SAMPLE_RC_CBR:
+                rc_param.h264_cbr_param.max_qp   = 51;
+                rc_param.h264_cbr_param.min_qp   = 15;
+                rc_param.h264_cbr_param.max_i_qp = 40;
+                rc_param.h264_cbr_param.min_i_qp = 15;
+                break;
+            case SAMPLE_RC_VBR:
+                rc_param.h264_vbr_param.max_qp   = 51;
+                rc_param.h264_vbr_param.min_qp   = 28;
+                rc_param.h264_vbr_param.max_i_qp = 40;
+                rc_param.h264_vbr_param.min_i_qp = 28;
+                break;
+            case SAMPLE_RC_AVBR:
+                rc_param.h264_avbr_param.max_qp   = 51;
+                rc_param.h264_avbr_param.min_qp   = 28;
+                rc_param.h264_avbr_param.max_i_qp = 40;
+                rc_param.h264_avbr_param.min_i_qp = 28;
+                break;
+            case SAMPLE_RC_QVBR:
+                rc_param.h264_qvbr_param.max_qp   = 51;
+                rc_param.h264_qvbr_param.min_qp   = 28;
+                rc_param.h264_qvbr_param.max_i_qp = 40;
+                rc_param.h264_qvbr_param.min_i_qp = 28;
+                break;
+            case SAMPLE_RC_CVBR:
+                rc_param.h264_cvbr_param.max_qp   = 51;
+                rc_param.h264_cvbr_param.min_qp   = 28;
+                rc_param.h264_cvbr_param.max_i_qp = 40;
+                rc_param.h264_cvbr_param.min_i_qp = 28;
+                break;
+            default:
+                break;
+            }
+        } else if (attr->type == OT_PT_H265) {
+            switch (attr->rc_mode) {
+            case SAMPLE_RC_ABR:
+                rc_param.h265_abr_param.max_p_qp  = 51;
+                rc_param.h265_abr_param.min_p_qp  = 15;
+                rc_param.h265_abr_param.max_i_qp  = 40;
+                rc_param.h265_abr_param.min_i_qp  = 15;
+                break;
+            case SAMPLE_RC_CBR:
+                rc_param.h265_cbr_param.max_qp   = 51;
+                rc_param.h265_cbr_param.min_qp   = 15;
+                rc_param.h265_cbr_param.max_i_qp = 40;
+                rc_param.h265_cbr_param.min_i_qp = 15;
+                break;
+            case SAMPLE_RC_VBR:
+                rc_param.h265_vbr_param.max_qp   = 51;
+                rc_param.h265_vbr_param.min_qp   = 28;
+                rc_param.h265_vbr_param.max_i_qp = 40;
+                rc_param.h265_vbr_param.min_i_qp = 28;
+                break;
+            case SAMPLE_RC_AVBR:
+                rc_param.h265_avbr_param.max_qp   = 51;
+                rc_param.h265_avbr_param.min_qp   = 28;
+                rc_param.h265_avbr_param.max_i_qp = 40;
+                rc_param.h265_avbr_param.min_i_qp = 28;
+                break;
+            case SAMPLE_RC_QVBR:
+                rc_param.h265_qvbr_param.max_qp   = 51;
+                rc_param.h265_qvbr_param.min_qp   = 28;
+                rc_param.h265_qvbr_param.max_i_qp = 40;
+                rc_param.h265_qvbr_param.min_i_qp = 28;
+                break;
+            case SAMPLE_RC_CVBR:
+                rc_param.h265_cvbr_param.max_qp   = 51;
+                rc_param.h265_cvbr_param.min_qp   = 28;
+                rc_param.h265_cvbr_param.max_i_qp = 40;
+                rc_param.h265_cvbr_param.min_i_qp = 28;
+                break;
+            default:
+                break;
+            }
+        }
+
+        ret = ss_mpi_venc_set_rc_param(chn, &rc_param);
+        if (ret != TD_SUCCESS) {
+            printf("[MEDIA] VENC chn%u set_rc_param failed: 0x%x\n", chn, ret);
+            ss_mpi_venc_destroy_chn(chn);
+            return ret;
+        }
+        printf("[MEDIA] VENC chn%u RC param configured (mode=%d)\n", chn, (int)attr->rc_mode);
+    }
+
+    /* step 3: set VUI timing (修正 ffprobe 读到的帧率)
      *  H.264: fps = time_scale / (2 * num_units_in_tick) */
     if (attr->type == OT_PT_H264) {
         ot_venc_h264_vui vui;
@@ -286,7 +394,7 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
                chn, vui.vui_time_info.time_scale, attr->frame_rate);
     }
 
-    /* step 3: start encoding */
+    /* step 4: start encoding */
     start_param.recv_pic_num = -1;
     ret = ss_mpi_venc_start_chn(chn, &start_param);
     if (ret != TD_SUCCESS) {
