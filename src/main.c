@@ -17,6 +17,7 @@
 #include <errno.h>
 
 #include "app_config.h"
+#include "ir_auto.h"
 
 /* ===== 应用层全局状态 ===== */
 static volatile td_bool g_exit_flag = TD_FALSE;
@@ -161,6 +162,7 @@ static td_void app_print_banner(td_void)
     printf("========================================\n");
     printf("  Hi3516CV610 Encode  (%u channel%s)\n",
            (td_u32)APP_VENC_CHN_CNT, APP_VENC_CHN_CNT > 1 ? "s" : "");
+    printf("  IR Auto : enabled (QFN GPIO %u+%u)\n", IR_GPIO_NUM_A, IR_GPIO_NUM_B);
     for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
         type_str = (g_chn_cfg[chn].type == OT_PT_H265) ? "H.265" :
                    (g_chn_cfg[chn].type == OT_PT_H264) ? "H.264" : "???";
@@ -208,6 +210,11 @@ static td_s32 app_run(td_void)
     ret = media_vi_start(&vi_cfg);
     if (ret != TD_SUCCESS) { goto EXIT_VB; }
     printf("[APP] VI start OK\n");
+
+    /* ---- 2.5 IR Auto 初始化 ---- */
+    ret = ir_auto_init(0);
+    if (ret != TD_SUCCESS) { goto EXIT_VI; }
+    printf("[APP] IR Auto init OK\n");
 
     /* ---- 3. VPSS ---- */
     {
@@ -266,6 +273,11 @@ static td_s32 app_run(td_void)
         printf("[APP] VPSS(0,%u) bind VENC(%u) OK\n", chn, chn);
     }
 
+    /* ---- 5.5 IR Auto 启动线程 ---- */
+    ret = ir_auto_start();
+    if (ret != TD_SUCCESS) { goto EXIT_UNBIND_ALL; }
+    printf("[APP] IR Auto thread started\n");
+
     /* ---- 6. 打开文件 ---- */
     for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
         const td_char *ext = (g_chn_cfg[chn].type == OT_PT_H265) ? "h265" : "h264";
@@ -311,6 +323,9 @@ EXIT_LOOP:
 
     /* ---- 8. 清理 ---- */
     printf("[APP] Stopping...\n");
+
+    /* 先停 IR Auto (VI 停止前) */
+    ir_auto_stop();
 
 EXIT_FILE:
     for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
