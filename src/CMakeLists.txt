@@ -38,6 +38,7 @@ add_executable(hi3516_project
     ${APP_SRC_DIR}/main.c
     ${APP_SRC_DIR}/venc_pipeline.c
     ${APP_SRC_DIR}/ir_auto.c
+    ${APP_SRC_DIR}/dbg.c
 )
 
 # SDK 库列表 (供 STATIC/SHARED 两种链接模式共用)

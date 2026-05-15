@@ -18,6 +18,7 @@
 #include "venc_pipeline.h"
 #include "sample_comm.h"
 #include "securec.h"
+#include "dbg.h"
 
 #include "ss_mpi_sys.h"
 #include "ss_mpi_vb.h"
@@ -45,7 +46,7 @@ td_s32 media_vb_init(const ot_vb_cfg *vb_cfg, td_u32 supplement)
     ot_vb_supplement_cfg  supp_cfg = { 0 };
 
     if (vb_cfg == TD_NULL) {
-        printf("[MEDIA] vb_cfg is null!\n");
+        DBG_ERROR("MEDIA", "vb_cfg is null!\n");
         return TD_FAILURE;
     }
 
@@ -55,20 +56,20 @@ td_s32 media_vb_init(const ot_vb_cfg *vb_cfg, td_u32 supplement)
 
     ret = ss_mpi_vb_set_cfg(vb_cfg);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] ss_mpi_vb_set_cfg failed: 0x%x\n", ret);
+        DBG_ERROR("MEDIA", "ss_mpi_vb_set_cfg failed: 0x%x\n", ret);
         return ret;
     }
 
     supp_cfg.supplement_cfg = supplement;
     ret = ss_mpi_vb_set_supplement_cfg(&supp_cfg);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] ss_mpi_vb_set_supplement_cfg failed: 0x%x\n", ret);
+        DBG_ERROR("MEDIA", "ss_mpi_vb_set_supplement_cfg failed: 0x%x\n", ret);
         return ret;
     }
 
     ret = ss_mpi_vb_init();
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] ss_mpi_vb_init failed: 0x%x\n", ret);
+        DBG_ERROR("MEDIA", "ss_mpi_vb_init failed: 0x%x\n", ret);
     }
     return ret;
 }
@@ -82,13 +83,13 @@ td_s32 media_vi_start(const sample_vi_cfg *vi_cfg)
     td_s32 ret;
 
     if (vi_cfg == TD_NULL) {
-        printf("[MEDIA] vi_cfg is null!\n");
+        DBG_ERROR("MEDIA", "vi_cfg is null!\n");
         return TD_FAILURE;
     }
 
     ret = sample_comm_vi_start_vi(vi_cfg);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VI start failed: 0x%x\n", ret);
+        DBG_ERROR("MEDIA", "VI start failed: 0x%x\n", ret);
     }
     return ret;
 }
@@ -110,7 +111,7 @@ td_s32 media_vpss_start_grp(ot_vpss_grp grp, const media_vpss_grp_attr *attr)
     ot_vpss_grp_attr  grp_attr = { 0 };
 
     if (attr == TD_NULL) {
-        printf("[MEDIA] vpss grp attr is null!\n");
+        DBG_ERROR("MEDIA", "vpss grp attr is null!\n");
         return TD_FAILURE;
     }
 
@@ -123,13 +124,13 @@ td_s32 media_vpss_start_grp(ot_vpss_grp grp, const media_vpss_grp_attr *attr)
 
     ret = ss_mpi_vpss_create_grp(grp, &grp_attr);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VPSS grp%u create failed: 0x%x\n", grp, ret);
+        DBG_ERROR("MEDIA", "VPSS grp%u create failed: 0x%x\n", grp, ret);
         return ret;
     }
 
     ret = ss_mpi_vpss_start_grp(grp);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VPSS grp%u start failed: 0x%x\n", grp, ret);
+        DBG_ERROR("MEDIA", "VPSS grp%u start failed: 0x%x\n", grp, ret);
         ss_mpi_vpss_destroy_grp(grp);
         return ret;
     }
@@ -143,7 +144,7 @@ td_s32 media_vpss_set_chn(ot_vpss_grp grp, ot_vpss_chn chn, const media_vpss_chn
     ot_vpss_chn_attr  chn_attr = { 0 };
 
     if (attr == TD_NULL) {
-        printf("[MEDIA] vpss chn attr is null!\n");
+        DBG_ERROR("MEDIA", "vpss chn attr is null!\n");
         return TD_FAILURE;
     }
 
@@ -161,7 +162,7 @@ td_s32 media_vpss_set_chn(ot_vpss_grp grp, ot_vpss_chn chn, const media_vpss_chn
 
     ret = ss_mpi_vpss_set_chn_attr(grp, chn, &chn_attr);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VPSS grp%u chn%u set attr failed: 0x%x\n", grp, chn, ret);
+        DBG_ERROR("MEDIA", "VPSS grp%u chn%u set attr failed: 0x%x\n", grp, chn, ret);
     }
     return ret;
 }
@@ -172,7 +173,7 @@ td_s32 media_vpss_enable_chn(ot_vpss_grp grp, ot_vpss_chn chn)
 
     ret = ss_mpi_vpss_enable_chn(grp, chn);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VPSS grp%u chn%u enable failed: 0x%x\n", grp, chn, ret);
+        DBG_ERROR("MEDIA", "VPSS grp%u chn%u enable failed: 0x%x\n", grp, chn, ret);
     }
     return ret;
 }
@@ -197,12 +198,12 @@ td_void media_vpss_stop_grp(ot_vpss_grp grp, const td_bool *chn_en, td_u32 chn_c
 
     ret = ss_mpi_vpss_stop_grp(grp);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VPSS grp%u stop failed: 0x%x\n", grp, ret);
+        DBG_ERROR("MEDIA", "VPSS grp%u stop failed: 0x%x\n", grp, ret);
     }
 
     ret = ss_mpi_vpss_destroy_grp(grp);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VPSS grp%u destroy failed: 0x%x\n", grp, ret);
+        DBG_ERROR("MEDIA", "VPSS grp%u destroy failed: 0x%x\n", grp, ret);
     }
 }
 
@@ -218,14 +219,14 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
     ot_venc_start_param        start_param;
 
     if (attr == TD_NULL) {
-        printf("[MEDIA] venc chn attr is null!\n");
+        DBG_ERROR("MEDIA", "venc chn attr is null!\n");
         return TD_FAILURE;
     }
 
     /* 获取 GOP 属性 (含各模式的子结构参数) */
     ret = sample_comm_venc_get_gop_attr(attr->gop_mode, &gop_attr);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] unsupported gop mode: %d\n", attr->gop_mode);
+        DBG_ERROR("MEDIA", "unsupported gop mode: %d\n", attr->gop_mode);
         return TD_FAILURE;
     }
 
@@ -242,7 +243,7 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
     /* step 1: create VENC channel (sample_comm_venc_create 做 create_chn + close_reencode) */
     ret = sample_comm_venc_create(chn, &param);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u create failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u create failed: 0x%x\n", chn, ret);
         return ret;
     }
 
@@ -251,7 +252,7 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
         ot_venc_rc_param rc_param;
         ret = ss_mpi_venc_get_rc_param(chn, &rc_param);
         if (ret != TD_SUCCESS) {
-            printf("[MEDIA] VENC chn%u get_rc_param failed: 0x%x\n", chn, ret);
+            DBG_ERROR("MEDIA", "VENC chn%u get_rc_param failed: 0x%x\n", chn, ret);
             ss_mpi_venc_destroy_chn(chn);
             return ret;
         }
@@ -342,11 +343,11 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
 
         ret = ss_mpi_venc_set_rc_param(chn, &rc_param);
         if (ret != TD_SUCCESS) {
-            printf("[MEDIA] VENC chn%u set_rc_param failed: 0x%x\n", chn, ret);
+            DBG_ERROR("MEDIA", "VENC chn%u set_rc_param failed: 0x%x\n", chn, ret);
             ss_mpi_venc_destroy_chn(chn);
             return ret;
         }
-        printf("[MEDIA] VENC chn%u RC param configured (mode=%d)\n", chn, (int)attr->rc_mode);
+        DBG_LOG("MEDIA", "VENC chn%u RC param configured (mode=%d)\n", chn, (int)attr->rc_mode);
     }
 
     /* step 3: set VUI timing (修正 ffprobe 读到的帧率)
@@ -355,7 +356,7 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
         ot_venc_h264_vui vui;
         ret = ss_mpi_venc_get_h264_vui(chn, &vui);
         if (ret != TD_SUCCESS) {
-            printf("[MEDIA] VENC chn%u get_h264_vui failed: 0x%x\n", chn, ret);
+            DBG_ERROR("MEDIA", "VENC chn%u get_h264_vui failed: 0x%x\n", chn, ret);
             ss_mpi_venc_destroy_chn(chn);
             return ret;
         }
@@ -366,17 +367,17 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
         vui.vui_time_info.time_scale                 = attr->frame_rate * 2;
         ret = ss_mpi_venc_set_h264_vui(chn, &vui);
         if (ret != TD_SUCCESS) {
-            printf("[MEDIA] VENC chn%u set_h264_vui failed: 0x%x\n", chn, ret);
+            DBG_ERROR("MEDIA", "VENC chn%u set_h264_vui failed: 0x%x\n", chn, ret);
             ss_mpi_venc_destroy_chn(chn);
             return ret;
         }
-        printf("[MEDIA] VENC chn%u H.264 VUI: time_scale=%u -> %ufps\n",
+        DBG_LOG("MEDIA", "VENC chn%u H.264 VUI: time_scale=%u -> %ufps\n",
                chn, vui.vui_time_info.time_scale, attr->frame_rate);
     } else if (attr->type == OT_PT_H265) {
         ot_venc_h265_vui vui;
         ret = ss_mpi_venc_get_h265_vui(chn, &vui);
         if (ret != TD_SUCCESS) {
-            printf("[MEDIA] VENC chn%u get_h265_vui failed: 0x%x\n", chn, ret);
+            DBG_ERROR("MEDIA", "VENC chn%u get_h265_vui failed: 0x%x\n", chn, ret);
             ss_mpi_venc_destroy_chn(chn);
             return ret;
         }
@@ -388,11 +389,11 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
         vui.vui_time_info.num_ticks_poc_diff_one_minus1 = 0;
         ret = ss_mpi_venc_set_h265_vui(chn, &vui);
         if (ret != TD_SUCCESS) {
-            printf("[MEDIA] VENC chn%u set_h265_vui failed: 0x%x\n", chn, ret);
+            DBG_ERROR("MEDIA", "VENC chn%u set_h265_vui failed: 0x%x\n", chn, ret);
             ss_mpi_venc_destroy_chn(chn);
             return ret;
         }
-        printf("[MEDIA] VENC chn%u H.265 VUI: time_scale=%u -> %ufps\n",
+        DBG_LOG("MEDIA", "VENC chn%u H.265 VUI: time_scale=%u -> %ufps\n",
                chn, vui.vui_time_info.time_scale, attr->frame_rate);
     }
 
@@ -400,7 +401,7 @@ td_s32 media_venc_create(ot_venc_chn chn, const media_venc_chn_attr *attr)
     start_param.recv_pic_num = -1;
     ret = ss_mpi_venc_start_chn(chn, &start_param);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u start_chn failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u start_chn failed: 0x%x\n", chn, ret);
         ss_mpi_venc_destroy_chn(chn);
         return ret;
     }
@@ -414,7 +415,7 @@ td_s32 media_venc_stop(ot_venc_chn chn)
 
     ret = ss_mpi_venc_stop_chn(chn);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u stop failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u stop failed: 0x%x\n", chn, ret);
     }
     return ret;
 }
@@ -425,13 +426,13 @@ td_s32 media_venc_destroy(ot_venc_chn chn)
 
     ret = ss_mpi_venc_stop_chn(chn);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u stop failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u stop failed: 0x%x\n", chn, ret);
         /* 继续尝试销毁 */
     }
 
     ret = ss_mpi_venc_destroy_chn(chn);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u destroy failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u destroy failed: 0x%x\n", chn, ret);
     }
     return ret;
 }
@@ -450,14 +451,14 @@ td_s32 media_venc_get_frame(ot_venc_chn chn, td_s32 timeout_ms, ot_venc_stream *
     struct timeval     *ptv;
 
     if (stream == TD_NULL) {
-        printf("[MEDIA] stream out param is null!\n");
+        DBG_ERROR("MEDIA", "stream out param is null!\n");
         return TD_FAILURE;
     }
     (td_void)memset_s(stream, sizeof(ot_venc_stream), 0, sizeof(ot_venc_stream));
 
     fd = ss_mpi_venc_get_fd(chn);
     if (fd < 0) {
-        printf("[MEDIA] VENC chn%u get_fd failed: 0x%x\n", chn, fd);
+        DBG_ERROR("MEDIA", "VENC chn%u get_fd failed: 0x%x\n", chn, fd);
         return TD_FAILURE;
     }
 
@@ -477,7 +478,7 @@ td_s32 media_venc_get_frame(ot_venc_chn chn, td_s32 timeout_ms, ot_venc_stream *
         if (errno == EINTR) {
             return MEDIA_ERR_VENC_TIMEOUT;  /* 被信号中断, 由上层检查退出标志 */
         }
-        printf("[MEDIA] VENC chn%u select failed: errno=%d\n", chn, errno);
+        DBG_ERROR("MEDIA", "VENC chn%u select failed: errno=%d\n", chn, errno);
         return TD_FAILURE;
     }
     if (ret == 0) {
@@ -488,7 +489,7 @@ td_s32 media_venc_get_frame(ot_venc_chn chn, td_s32 timeout_ms, ot_venc_stream *
     /* fd 就绪，查询 pack 数量 */
     ret = ss_mpi_venc_query_status(chn, &stat);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u query_status failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u query_status failed: 0x%x\n", chn, ret);
         return ret;
     }
     if (stat.cur_packs == 0) {
@@ -498,7 +499,7 @@ td_s32 media_venc_get_frame(ot_venc_chn chn, td_s32 timeout_ms, ot_venc_stream *
     /* 分配 pack 数组 */
     stream->pack = (ot_venc_pack *)malloc(sizeof(ot_venc_pack) * stat.cur_packs);
     if (stream->pack == TD_NULL) {
-        printf("[MEDIA] VENC chn%u malloc pack failed\n", chn);
+        DBG_ERROR("MEDIA", "VENC chn%u malloc pack failed\n", chn);
         return TD_FAILURE;
     }
     stream->pack_cnt = stat.cur_packs;
@@ -506,7 +507,7 @@ td_s32 media_venc_get_frame(ot_venc_chn chn, td_s32 timeout_ms, ot_venc_stream *
     /* 获取码流 (fd 已就绪，非阻塞) */
     ret = ss_mpi_venc_get_stream(chn, stream, 0);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u get_stream failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u get_stream failed: 0x%x\n", chn, ret);
         free(stream->pack);
         stream->pack     = TD_NULL;
         stream->pack_cnt = 0;
@@ -524,7 +525,7 @@ td_s32 media_venc_release_frame(ot_venc_chn chn, ot_venc_stream *stream)
 
     ret = ss_mpi_venc_release_stream(chn, stream);
     if (ret != TD_SUCCESS) {
-        printf("[MEDIA] VENC chn%u release_stream failed: 0x%x\n", chn, ret);
+        DBG_ERROR("MEDIA", "VENC chn%u release_stream failed: 0x%x\n", chn, ret);
     }
 
     free(stream->pack);
@@ -623,38 +624,38 @@ td_s32 media_pipeline_video_init(const ot_vb_cfg *vb_cfg, td_u32 supplement,
     sample_vi_cfg   vi_cfg;
 
     if (chn_cnt == 0 || chn_cnt > 4) {
-        printf("[MEDIA] invalid chn_cnt: %u\n", chn_cnt);
+        DBG_ERROR("MEDIA", "invalid chn_cnt: %u\n", chn_cnt);
         return TD_FAILURE;
     }
 
     /* ---- 1. VB ---- */
     ret = media_vb_init(vb_cfg, supplement);
     if (ret != TD_SUCCESS) { return ret; }
-    printf("[APP] VB init OK\n");
+    DBG_LOG("APP", "VB init OK\n");
 
     /* ---- 2. SYS ---- */
     ret = media_sys_init();
     if (ret != TD_SUCCESS) { goto EXIT_SYS_FAIL; }
-    printf("[APP] SYS init OK\n");
+    DBG_LOG("APP", "SYS init OK\n");
 
     /* ---- 3. VI ---- */
     sample_comm_vi_get_default_vi_cfg(sns_type, &vi_cfg);
     ret = media_vi_start(&vi_cfg);
     if (ret != TD_SUCCESS) { goto EXIT_SYS_CLEAN; }
-    printf("[APP] VI start OK\n");
+    DBG_LOG("APP", "VI start OK\n");
 
     /* ---- 4. VPSS grp + chns ---- */
     ret = media_vpss_start_grp(0, grp_attr);
     if (ret != TD_SUCCESS) { goto EXIT_VI_CLEAN; }
     vpss_up = TD_TRUE;
-    printf("[APP] VPSS grp0 start OK\n");
+    DBG_LOG("APP", "VPSS grp0 start OK\n");
 
     for (i = 0; i < chn_cnt; i++) {
         ret = media_vpss_set_chn(0, (ot_vpss_chn)i, &chn_attr_arr[i]);
         if (ret != TD_SUCCESS) { goto EXIT_VPSS_CLEAN; }
         ret = media_vpss_enable_chn(0, (ot_vpss_chn)i);
         if (ret != TD_SUCCESS) { goto EXIT_VPSS_CLEAN; }
-        printf("[APP] VPSS chn%u enable OK\n", i);
+        DBG_LOG("APP", "VPSS chn%u enable OK\n", i);
     }
 
     /* ---- 5. VENC ---- */
@@ -662,18 +663,18 @@ td_s32 media_pipeline_video_init(const ot_vb_cfg *vb_cfg, td_u32 supplement,
         ret = media_venc_create((ot_venc_chn)i, &venc_attr_arr[i]);
         if (ret != TD_SUCCESS) { goto EXIT_VENC_CLEAN; }
         venc_done++;
-        printf("[APP] VENC chn%u create OK\n", i);
+        DBG_LOG("APP", "VENC chn%u create OK\n", i);
     }
 
     /* ---- 6. Bind ---- */
     ret = media_mpi_bind_vi_vpss(0, 0, 0, 0);
     if (ret != TD_SUCCESS) { goto EXIT_VENC_CLEAN; }
-    printf("[APP] VI(0,0) bind VPSS(0,0) OK\n");
+    DBG_LOG("APP", "VI(0,0) bind VPSS(0,0) OK\n");
 
     for (i = 0; i < chn_cnt; i++) {
         ret = media_mpi_bind_vpss_venc(0, (ot_vpss_chn)i, (ot_venc_chn)i);
         if (ret != TD_SUCCESS) { goto EXIT_UNBIND_CLEAN; }
-        printf("[APP] VPSS(0,%u) bind VENC(%u) OK\n", i, i);
+        DBG_LOG("APP", "VPSS(0,%u) bind VENC(%u) OK\n", i, i);
     }
 
     *out_vi_cfg = vi_cfg;
@@ -707,33 +708,33 @@ td_void media_pipeline_video_deinit(const sample_vi_cfg *vi_cfg, td_u32 chn_cnt)
     td_u32  i;
     td_bool en[4] = { TD_FALSE };
 
-    printf("[APP] Pipeline video deinit...\n");
+    DBG_LOG("APP", "Pipeline video deinit...\n");
 
     /* unbind (正序解绑) */
     for (i = 0; i < chn_cnt; i++) {
         media_mpi_unbind_vpss_venc(0, (ot_vpss_chn)i, (ot_venc_chn)i);
     }
     media_mpi_unbind_vi_vpss(0, 0, 0, 0);
-    printf("[APP] unbind done\n");
+    DBG_LOG("APP", "unbind done\n");
 
     /* VENC destroy */
     for (i = 0; i < chn_cnt; i++) {
         media_venc_destroy((ot_venc_chn)i);
     }
-    printf("[APP] VENC destroy done\n");
+    DBG_LOG("APP", "VENC destroy done\n");
 
     /* VPSS stop */
     for (i = 0; i < chn_cnt; i++) { en[i] = TD_TRUE; }
     media_vpss_stop_grp(0, en, chn_cnt);
-    printf("[APP] VPSS stop done\n");
+    DBG_LOG("APP", "VPSS stop done\n");
 
     /* VI stop */
     media_vi_stop(vi_cfg);
-    printf("[APP] VI stop done\n");
+    DBG_LOG("APP", "VI stop done\n");
 
     /* SYS exit */
     media_sys_exit();
-    printf("[APP] SYS exit done\n");
+    DBG_LOG("APP", "SYS exit done\n");
 }
 
 td_s32 media_pipeline_stream_init(FILE **fps, const td_char **file_names, td_u32 chn_cnt)
@@ -743,12 +744,12 @@ td_s32 media_pipeline_stream_init(FILE **fps, const td_char **file_names, td_u32
     for (i = 0; i < chn_cnt; i++) {
         fps[i] = fopen(file_names[i], "wb");
         if (fps[i] == TD_NULL) {
-            printf("[APP] open [%s] failed: %s\n", file_names[i], strerror(errno));
+            DBG_ERROR("APP", "open [%s] failed: %s\n", file_names[i], strerror(errno));
             /* 关闭已打开的文件 */
             media_pipeline_stream_deinit(fps, i);
             return TD_FAILURE;
         }
-        printf("[APP] Output chn%u: %s\n", i, file_names[i]);
+        DBG_LOG("APP", "Output chn%u: %s\n", i, file_names[i]);
     }
     return TD_SUCCESS;
 }
@@ -761,7 +762,7 @@ td_void media_pipeline_stream_deinit(FILE **fps, td_u32 chn_cnt)
         if (fps[i] != TD_NULL) {
             fclose(fps[i]);
             fps[i] = TD_NULL;
-            printf("[APP] chn%u file closed\n", i);
+            DBG_LOG("APP", "chn%u file closed\n", i);
         }
     }
 }
@@ -779,7 +780,7 @@ td_void *media_pipeline_stream_thread(td_void *arg)
 
     timeout_ms = (targ->chn_cnt == 1) ? 2000 : 0;
 
-    printf("[MEDIA] stream thread started (%u chn%s)\n",
+    DBG_LOG("MEDIA", "stream thread started (%u chn%s)\n",
            targ->chn_cnt, targ->chn_cnt > 1 ? "s" : "");
 
     while (!(*targ->exit_flag)) {
@@ -789,7 +790,7 @@ td_void *media_pipeline_stream_thread(td_void *arg)
                 continue;
             }
             if (ret != TD_SUCCESS) {
-                printf("[MEDIA] chn%u get_frame error: 0x%x\n", chn, ret);
+                DBG_ERROR("MEDIA", "chn%u get_frame error: 0x%x\n", chn, ret);
                 return TD_NULL;
             }
 
@@ -801,7 +802,7 @@ td_void *media_pipeline_stream_thread(td_void *arg)
             frame_cnt[chn]++;
 
             if ((frame_cnt[chn] & 0x3F) == 0) {
-                printf("[APP] chn%u encoded %u frames\n", chn, frame_cnt[chn]);
+                DBG_LOG("APP", "chn%u encoded %u frames\n", chn, frame_cnt[chn]);
             }
         }
         if (targ->chn_cnt > 1) {
@@ -809,6 +810,6 @@ td_void *media_pipeline_stream_thread(td_void *arg)
         }
     }
 
-    printf("[MEDIA] stream thread stopped\n");
+    DBG_LOG("MEDIA", "stream thread stopped\n");
     return TD_NULL;
 }
