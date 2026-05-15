@@ -1,9 +1,9 @@
 /**
- * @file    thread.h
+ * @file    sys_thread.h
  * @brief   Hi3516CV610 线程封装模块
  *
  * 对 pthread_create / pthread_join / prctl 的统一封装。
- * 创建时传入线程名和栈大小，内部自动设置 prctl 名称。
+ * 创建时传入线程名和栈大小。
  *
  * 用法:
  *   thread_t  thr;
