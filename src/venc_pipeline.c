@@ -11,6 +11,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
+#include <sys/prctl.h>
 #include <sys/select.h>
 
 #include "venc_pipeline.h"
@@ -600,4 +602,213 @@ td_s32 media_mpi_unbind_vpss_venc(ot_vpss_grp vpss_grp, ot_vpss_chn vpss_chn, ot
     dst_chn.chn_id = venc_chn;
 
     return ss_mpi_sys_unbind(&src_chn, &dst_chn);
+}
+
+/* ====================================================================
+ *  Pipeline 一体化接口
+ * ==================================================================== */
+
+td_s32 media_pipeline_video_init(const ot_vb_cfg *vb_cfg, td_u32 supplement,
+                                  sample_sns_type sns_type,
+                                  const media_vpss_grp_attr *grp_attr,
+                                  const media_vpss_chn_attr *chn_attr_arr,
+                                  const media_venc_chn_attr *venc_attr_arr,
+                                  td_u32 chn_cnt,
+                                  sample_vi_cfg *out_vi_cfg)
+{
+    td_s32          ret;
+    td_u32          i;
+    td_u32          venc_done = 0;
+    td_bool         vpss_up   = TD_FALSE;
+    sample_vi_cfg   vi_cfg;
+
+    if (chn_cnt == 0 || chn_cnt > 4) {
+        printf("[MEDIA] invalid chn_cnt: %u\n", chn_cnt);
+        return TD_FAILURE;
+    }
+
+    /* ---- 1. VB ---- */
+    ret = media_vb_init(vb_cfg, supplement);
+    if (ret != TD_SUCCESS) { return ret; }
+    printf("[APP] VB init OK\n");
+
+    /* ---- 2. SYS ---- */
+    ret = media_sys_init();
+    if (ret != TD_SUCCESS) { goto EXIT_SYS_FAIL; }
+    printf("[APP] SYS init OK\n");
+
+    /* ---- 3. VI ---- */
+    sample_comm_vi_get_default_vi_cfg(sns_type, &vi_cfg);
+    ret = media_vi_start(&vi_cfg);
+    if (ret != TD_SUCCESS) { goto EXIT_SYS_CLEAN; }
+    printf("[APP] VI start OK\n");
+
+    /* ---- 4. VPSS grp + chns ---- */
+    ret = media_vpss_start_grp(0, grp_attr);
+    if (ret != TD_SUCCESS) { goto EXIT_VI_CLEAN; }
+    vpss_up = TD_TRUE;
+    printf("[APP] VPSS grp0 start OK\n");
+
+    for (i = 0; i < chn_cnt; i++) {
+        ret = media_vpss_set_chn(0, (ot_vpss_chn)i, &chn_attr_arr[i]);
+        if (ret != TD_SUCCESS) { goto EXIT_VPSS_CLEAN; }
+        ret = media_vpss_enable_chn(0, (ot_vpss_chn)i);
+        if (ret != TD_SUCCESS) { goto EXIT_VPSS_CLEAN; }
+        printf("[APP] VPSS chn%u enable OK\n", i);
+    }
+
+    /* ---- 5. VENC ---- */
+    for (i = 0; i < chn_cnt; i++) {
+        ret = media_venc_create((ot_venc_chn)i, &venc_attr_arr[i]);
+        if (ret != TD_SUCCESS) { goto EXIT_VENC_CLEAN; }
+        venc_done++;
+        printf("[APP] VENC chn%u create OK\n", i);
+    }
+
+    /* ---- 6. Bind ---- */
+    ret = media_mpi_bind_vi_vpss(0, 0, 0, 0);
+    if (ret != TD_SUCCESS) { goto EXIT_VENC_CLEAN; }
+    printf("[APP] VI(0,0) bind VPSS(0,0) OK\n");
+
+    for (i = 0; i < chn_cnt; i++) {
+        ret = media_mpi_bind_vpss_venc(0, (ot_vpss_chn)i, (ot_venc_chn)i);
+        if (ret != TD_SUCCESS) { goto EXIT_UNBIND_CLEAN; }
+        printf("[APP] VPSS(0,%u) bind VENC(%u) OK\n", i, i);
+    }
+
+    *out_vi_cfg = vi_cfg;
+    return TD_SUCCESS;
+
+EXIT_UNBIND_CLEAN:
+    media_mpi_unbind_vi_vpss(0, 0, 0, 0);
+    for (i = 0; i < chn_cnt; i++) {
+        media_mpi_unbind_vpss_venc(0, (ot_vpss_chn)i, (ot_venc_chn)i);
+    }
+EXIT_VENC_CLEAN:
+    for (i = 0; i < venc_done; i++) {
+        media_venc_destroy((ot_venc_chn)i);
+    }
+EXIT_VPSS_CLEAN:
+    if (vpss_up) {
+        td_bool en[4] = { TD_FALSE };
+        for (i = 0; i < chn_cnt; i++) { en[i] = TD_TRUE; }
+        media_vpss_stop_grp(0, en, chn_cnt);
+    }
+EXIT_VI_CLEAN:
+    media_vi_stop(&vi_cfg);
+EXIT_SYS_CLEAN:
+    media_sys_exit();
+EXIT_SYS_FAIL:
+    return ret;
+}
+
+td_void media_pipeline_video_deinit(const sample_vi_cfg *vi_cfg, td_u32 chn_cnt)
+{
+    td_u32  i;
+    td_bool en[4] = { TD_FALSE };
+
+    printf("[APP] Pipeline video deinit...\n");
+
+    /* unbind (正序解绑) */
+    for (i = 0; i < chn_cnt; i++) {
+        media_mpi_unbind_vpss_venc(0, (ot_vpss_chn)i, (ot_venc_chn)i);
+    }
+    media_mpi_unbind_vi_vpss(0, 0, 0, 0);
+    printf("[APP] unbind done\n");
+
+    /* VENC destroy */
+    for (i = 0; i < chn_cnt; i++) {
+        media_venc_destroy((ot_venc_chn)i);
+    }
+    printf("[APP] VENC destroy done\n");
+
+    /* VPSS stop */
+    for (i = 0; i < chn_cnt; i++) { en[i] = TD_TRUE; }
+    media_vpss_stop_grp(0, en, chn_cnt);
+    printf("[APP] VPSS stop done\n");
+
+    /* VI stop */
+    media_vi_stop(vi_cfg);
+    printf("[APP] VI stop done\n");
+
+    /* SYS exit */
+    media_sys_exit();
+    printf("[APP] SYS exit done\n");
+}
+
+td_s32 media_pipeline_stream_init(FILE **fps, const td_char **file_names, td_u32 chn_cnt)
+{
+    td_u32 i;
+
+    for (i = 0; i < chn_cnt; i++) {
+        fps[i] = fopen(file_names[i], "wb");
+        if (fps[i] == TD_NULL) {
+            printf("[APP] open [%s] failed: %s\n", file_names[i], strerror(errno));
+            /* 关闭已打开的文件 */
+            media_pipeline_stream_deinit(fps, i);
+            return TD_FAILURE;
+        }
+        printf("[APP] Output chn%u: %s\n", i, file_names[i]);
+    }
+    return TD_SUCCESS;
+}
+
+td_void media_pipeline_stream_deinit(FILE **fps, td_u32 chn_cnt)
+{
+    td_u32 i;
+
+    for (i = 0; i < chn_cnt; i++) {
+        if (fps[i] != TD_NULL) {
+            fclose(fps[i]);
+            fps[i] = TD_NULL;
+            printf("[APP] chn%u file closed\n", i);
+        }
+    }
+}
+
+td_void *media_pipeline_stream_thread(td_void *arg)
+{
+    media_stream_thread_arg *targ = (media_stream_thread_arg *)arg;
+    td_u32          chn;
+    td_u32          frame_cnt[4] = { 0 };
+    td_s32          timeout_ms;
+    ot_venc_stream  stream;
+    td_s32          ret;
+
+    prctl(PR_SET_NAME, "enc_stream", 0, 0, 0);
+
+    timeout_ms = (targ->chn_cnt == 1) ? 2000 : 0;
+
+    printf("[MEDIA] stream thread started (%u chn%s)\n",
+           targ->chn_cnt, targ->chn_cnt > 1 ? "s" : "");
+
+    while (!(*targ->exit_flag)) {
+        for (chn = 0; chn < targ->chn_cnt; chn++) {
+            ret = media_venc_get_frame((ot_venc_chn)chn, timeout_ms, &stream);
+            if (ret == MEDIA_ERR_VENC_TIMEOUT) {
+                continue;
+            }
+            if (ret != TD_SUCCESS) {
+                printf("[MEDIA] chn%u get_frame error: 0x%x\n", chn, ret);
+                return TD_NULL;
+            }
+
+            if (targ->callback != TD_NULL) {
+                targ->callback(chn, &stream, targ->user_data);
+            }
+
+            media_venc_release_frame((ot_venc_chn)chn, &stream);
+            frame_cnt[chn]++;
+
+            if ((frame_cnt[chn] & 0x3F) == 0) {
+                printf("[APP] chn%u encoded %u frames\n", chn, frame_cnt[chn]);
+            }
+        }
+        if (targ->chn_cnt > 1) {
+            usleep(10000);
+        }
+    }
+
+    printf("[MEDIA] stream thread stopped\n");
+    return TD_NULL;
 }

@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "app_config.h"
 #include "ir_auto.h"
@@ -100,18 +101,20 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
  * Linux 下使用虚拟地址 addr 直接写入。
  * MMP 驱动已将 DMA buffer mmap 到用户空间，无需 phys_addr 回绕。
  */
-static td_s32 app_write_stream(const ot_venc_stream *stream, FILE *fp)
+static td_s32 app_write_stream(td_u32 chn, const ot_venc_stream *stream, td_void *user_data)
 {
-    td_u32 i;
+    FILE   **fp = (FILE **)user_data;
+    td_u32   i;
 
-    if (stream == TD_NULL || stream->pack == TD_NULL || fp == TD_NULL) {
+    if (stream == TD_NULL || stream->pack == TD_NULL || fp == TD_NULL
+        || fp[chn] == TD_NULL) {
         return TD_FAILURE;
     }
 
     for (i = 0; i < stream->pack_cnt; i++) {
         (td_void)fwrite(stream->pack[i].addr + stream->pack[i].offset,
-                        stream->pack[i].len - stream->pack[i].offset, 1, fp);
-        (td_void)fflush(fp);
+                        stream->pack[i].len - stream->pack[i].offset, 1, fp[chn]);
+        (td_void)fflush(fp[chn]);
     }
     return TD_SUCCESS;
 }
@@ -186,194 +189,110 @@ static td_void app_print_banner(td_void)
  * ==================================================================== */
 static td_s32 app_run(td_void)
 {
-    td_s32           ret = TD_SUCCESS;
-    ot_vb_cfg        vb_cfg;
-    sample_vi_cfg    vi_cfg;
-    FILE            *fp[3] = { TD_NULL, TD_NULL, TD_NULL };
-    ot_venc_stream   stream;
-    td_char          file_name[128];
-    td_u32           chn;
+    td_s32              ret;
+    ot_vb_cfg           vb_cfg;
+    sample_vi_cfg       vi_cfg;
+    media_vpss_grp_attr grp_attr;
+    media_vpss_chn_attr chn_attr[3];
+    media_venc_chn_attr venc_attr[3];
+    FILE               *fp[3] = { TD_NULL, TD_NULL, TD_NULL };
+    td_char             file_name[128];
+    const td_char      *file_names[3];
+    pthread_t           stream_tid  = 0;
+    media_stream_thread_arg stream_arg;
+    td_u32              chn;
 
-    /* ---- 1. 系统 + VB ---- */
+    /* ---- 1. 组装 VPSS/VENC 属性 ---- */
+    grp_attr.max_width     = APP_VPSS_MAX_W;
+    grp_attr.max_height    = APP_VPSS_MAX_H;
+    grp_attr.pixel_format  = APP_VPSS_PIX_FMT;
+    grp_attr.src_frame_rate = -1;
+    grp_attr.dst_frame_rate = -1;
+
+    for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
+        chn_attr[chn].width          = g_chn_cfg[chn].vpss_w;
+        chn_attr[chn].height         = g_chn_cfg[chn].vpss_h;
+        chn_attr[chn].pixel_format   = g_chn_cfg[chn].vpss_pix_fmt;
+        chn_attr[chn].compress_mode  = g_chn_cfg[chn].vpss_compress;
+        chn_attr[chn].depth          = g_chn_cfg[chn].vpss_depth;
+        chn_attr[chn].src_frame_rate = (td_s32)g_chn_cfg[chn].vpss_src_fps;
+        chn_attr[chn].dst_frame_rate = (td_s32)g_chn_cfg[chn].vpss_dst_fps;
+
+        venc_attr[chn].type        = g_chn_cfg[chn].type;
+        venc_attr[chn].size.width  = g_chn_cfg[chn].width;
+        venc_attr[chn].size.height = g_chn_cfg[chn].height;
+        venc_attr[chn].frame_rate  = g_chn_cfg[chn].fps;
+        venc_attr[chn].gop         = g_chn_cfg[chn].gop;
+        venc_attr[chn].bitrate     = g_chn_cfg[chn].bitrate;
+        venc_attr[chn].rc_mode     = g_chn_cfg[chn].rc_mode;
+        venc_attr[chn].profile     = g_chn_cfg[chn].profile;
+        venc_attr[chn].gop_mode    = g_chn_cfg[chn].gop_mode;
+    }
+
+    /* ---- 2. 视频管线初始化 ---- */
     app_build_vb(&vb_cfg);
-    ret = media_vb_init(&vb_cfg,
-            OT_VB_SUPPLEMENT_JPEG_MASK | OT_VB_SUPPLEMENT_BNR_MOT_MASK);
-    if (ret != TD_SUCCESS) { goto EXIT; }
-    printf("[APP] VB init OK\n");
+    ret = media_pipeline_video_init(&vb_cfg,
+            OT_VB_SUPPLEMENT_JPEG_MASK | OT_VB_SUPPLEMENT_BNR_MOT_MASK,
+            APP_SNS_TYPE, &grp_attr, chn_attr, venc_attr,
+            APP_VENC_CHN_CNT, &vi_cfg);
+    if (ret != TD_SUCCESS) {
+        printf("[APP] video init failed: 0x%x\n", ret);
+        return -1;
+    }
+    printf("[APP] Pipeline video init OK\n");
 
-    ret = media_sys_init();
-    if (ret != TD_SUCCESS) { goto EXIT_SYS; }
-    printf("[APP] SYS init OK\n");
-
-    /* ---- 2. VI ---- */
-    sample_comm_vi_get_default_vi_cfg(APP_SNS_TYPE, &vi_cfg);
-    ret = media_vi_start(&vi_cfg);
-    if (ret != TD_SUCCESS) { goto EXIT_VB; }
-    printf("[APP] VI start OK\n");
-
-    /* ---- 2.5 IR Auto 初始化 ---- */
+    /* ---- 3. IR Auto ---- */
     ret = ir_auto_init(0);
-    if (ret != TD_SUCCESS) { goto EXIT_VI; }
+    if (ret != TD_SUCCESS) { goto EXIT_VIDEO; }
     printf("[APP] IR Auto init OK\n");
 
-    /* ---- 3. VPSS ---- */
-    {
-        media_vpss_grp_attr grp_attr;
-        grp_attr.max_width    = APP_VPSS_MAX_W;
-        grp_attr.max_height   = APP_VPSS_MAX_H;
-        grp_attr.pixel_format = APP_VPSS_PIX_FMT;
-        grp_attr.src_frame_rate = -1;
-        grp_attr.dst_frame_rate = -1;
-        ret = media_vpss_start_grp(0, &grp_attr);
-        if (ret != TD_SUCCESS) { goto EXIT_VI; }
-        printf("[APP] VPSS grp0 start OK\n");
-    }
-
-    for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-        media_vpss_chn_attr chn_attr;
-        chn_attr.width          = g_chn_cfg[chn].vpss_w;
-        chn_attr.height         = g_chn_cfg[chn].vpss_h;
-        chn_attr.pixel_format   = g_chn_cfg[chn].vpss_pix_fmt;
-        chn_attr.compress_mode  = g_chn_cfg[chn].vpss_compress;
-        chn_attr.depth          = g_chn_cfg[chn].vpss_depth;
-        chn_attr.src_frame_rate = (td_s32)g_chn_cfg[chn].vpss_src_fps;
-        chn_attr.dst_frame_rate = (td_s32)g_chn_cfg[chn].vpss_dst_fps;
-        ret = media_vpss_set_chn(0, (ot_vpss_chn)chn, &chn_attr);
-        if (ret != TD_SUCCESS) { goto EXIT_VPSS; }
-        ret = media_vpss_enable_chn(0, (ot_vpss_chn)chn);
-        if (ret != TD_SUCCESS) { goto EXIT_VPSS; }
-        printf("[APP] VPSS chn%u enable OK\n", chn);
-    }
-
-    /* ---- 4. VENC ---- */
-    for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-        media_venc_chn_attr venc_attr;
-        venc_attr.type       = g_chn_cfg[chn].type;
-        venc_attr.size.width  = g_chn_cfg[chn].width;
-        venc_attr.size.height = g_chn_cfg[chn].height;
-        venc_attr.frame_rate  = g_chn_cfg[chn].fps;
-        venc_attr.gop         = g_chn_cfg[chn].gop;
-        venc_attr.bitrate     = g_chn_cfg[chn].bitrate;
-        venc_attr.rc_mode     = g_chn_cfg[chn].rc_mode;
-        venc_attr.profile     = g_chn_cfg[chn].profile;
-        venc_attr.gop_mode    = g_chn_cfg[chn].gop_mode;
-        ret = media_venc_create((ot_venc_chn)chn, &venc_attr);
-        if (ret != TD_SUCCESS) { goto EXIT_VPSS; }
-        printf("[APP] VENC chn%u create OK\n", chn);
-    }
-
-    /* ---- 5. 绑定 ---- */
-    ret = media_mpi_bind_vi_vpss(0, 0, 0, 0);
-    if (ret != TD_SUCCESS) { goto EXIT_VENC_ALL; }
-    printf("[APP] VI(0,0) bind VPSS(0,0) OK\n");
-
-    for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-        ret = media_mpi_bind_vpss_venc(0, (ot_vpss_chn)chn, (ot_venc_chn)chn);
-        if (ret != TD_SUCCESS) { goto EXIT_UNBIND_ALL; }
-        printf("[APP] VPSS(0,%u) bind VENC(%u) OK\n", chn, chn);
-    }
-
-    /* ---- 5.5 IR Auto 启动线程 ---- */
     ret = ir_auto_start();
-    if (ret != TD_SUCCESS) { goto EXIT_UNBIND_ALL; }
+    if (ret != TD_SUCCESS) { goto EXIT_IR_DEINIT; }
     printf("[APP] IR Auto thread started\n");
 
-    /* ---- 6. 打开文件 ---- */
+    /* ---- 4. 打开输出文件 ---- */
     for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
         const td_char *ext = (g_chn_cfg[chn].type == OT_PT_H265) ? "h265" : "h264";
         snprintf(file_name, sizeof(file_name), "%s.%s",
                  g_chn_cfg[chn].file_prefix, ext);
-        fp[chn] = fopen(file_name, "wb");
-        if (fp[chn] == TD_NULL) {
-            printf("[APP] open [%s] failed: %s\n", file_name, strerror(errno));
-            goto EXIT_FILE;
-        }
-        printf("[APP] Output chn%u: %s\n", chn, file_name);
+        file_names[chn] = file_name;
     }
+    ret = media_pipeline_stream_init(fp, file_names, APP_VENC_CHN_CNT);
+    if (ret != TD_SUCCESS) { goto EXIT_IR_STOP; }
 
-    /* ---- 7. 取流循环 ---- */
+    /* ---- 5. 启动取流线程 ---- */
+    stream_arg.chn_cnt   = APP_VENC_CHN_CNT;
+    stream_arg.exit_flag = &g_exit_flag;
+    stream_arg.callback  = app_write_stream;
+    stream_arg.user_data = fp;
+
+    ret = pthread_create(&stream_tid, TD_NULL,
+                         media_pipeline_stream_thread, &stream_arg);
+    if (ret != 0) {
+        printf("[APP] stream thread create failed: %d\n", ret);
+        goto EXIT_FILE;
+    }
     printf("[APP] Encoding... press Ctrl+C to stop\n");
-    {
-        td_u32 frame_cnt[3] = { 0, 0, 0 };
-        td_s32 timeout_ms = (APP_VENC_CHN_CNT == 1) ? 2000 : 0;
 
-        while (!g_exit_flag) {
-            for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-                ret = media_venc_get_frame((ot_venc_chn)chn, timeout_ms, &stream);
-                if (ret == MEDIA_ERR_VENC_TIMEOUT) {
-                    continue;
-                }
-                if (ret != TD_SUCCESS) {
-                    printf("[APP] VENC chn%u get_frame error: 0x%x\n", chn, ret);
-                    goto EXIT_LOOP;
-                }
-                app_write_stream(&stream, fp[chn]);
-                media_venc_release_frame((ot_venc_chn)chn, &stream);
-                frame_cnt[chn]++;
-                if ((frame_cnt[chn] & 0x3F) == 0) {
-                    printf("[APP] chn%u encoded %u frames\n", chn, frame_cnt[chn]);
-                }
-            }
-            if (APP_VENC_CHN_CNT > 1) {
-                usleep(10000);  /* 多路轮询间隔 10ms */
-            }
-        }
+    /* ---- 6. 等待退出信号 ---- */
+    while (!g_exit_flag) {
+        usleep(100000);
     }
-EXIT_LOOP:
 
-    /* ---- 8. 清理 ---- */
     printf("[APP] Stopping...\n");
 
-    /* 先停 IR Auto (VI 停止前) */
-    ir_auto_stop();
+    /* ---- 7. 等待取流线程结束 ---- */
+    pthread_join(stream_tid, TD_NULL);
 
+    /* ---- 8. 逆序清理 ---- */
+    media_pipeline_stream_deinit(fp, APP_VENC_CHN_CNT);
 EXIT_FILE:
-    for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-        if (fp[chn]) {
-            fclose(fp[chn]);
-            fp[chn] = TD_NULL;
-            printf("[APP] chn%u file closed\n", chn);
-        }
-    }
+    ir_auto_stop();
+EXIT_IR_STOP:
+EXIT_IR_DEINIT:
+EXIT_VIDEO:
+    media_pipeline_video_deinit(&vi_cfg, APP_VENC_CHN_CNT);
 
-    for (chn = APP_VENC_CHN_CNT; chn > 0; chn--) {
-        ret = media_mpi_unbind_vpss_venc(0, (ot_vpss_chn)(chn - 1), (ot_venc_chn)(chn - 1));
-        printf("[APP] VPSS-VENC chn%u unbind %s (ret=0x%x)\n",
-               chn - 1, ret == TD_SUCCESS ? "OK" : "FAIL", ret);
-    }
-EXIT_UNBIND_ALL:
-    ret = media_mpi_unbind_vi_vpss(0, 0, 0, 0);
-    printf("[APP] VI-VPSS unbind %s (ret=0x%x)\n",
-           ret == TD_SUCCESS ? "OK" : "FAIL", ret);
-EXIT_VENC_ALL:
-    for (chn = APP_VENC_CHN_CNT; chn > 0; chn--) {
-        ret = media_venc_destroy((ot_venc_chn)(chn - 1));
-        printf("[APP] VENC chn%u destroy %s (ret=0x%x)\n",
-               chn - 1, ret == TD_SUCCESS ? "OK" : "FAIL", ret);
-    }
-EXIT_VPSS:
-    {
-        td_bool chn_en[3] = { TD_FALSE, TD_FALSE, TD_FALSE };
-        for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-            chn_en[chn] = TD_TRUE;
-        }
-        media_vpss_stop_grp(0, chn_en, APP_VENC_CHN_CNT);
-        printf("[APP] VPSS stop done\n");
-    }
-EXIT_VI:
-    media_vi_stop(&vi_cfg);
-    printf("[APP] VI stop done\n");
-EXIT_VB:
-    media_sys_exit();
-    printf("[APP] SYS exit done\n");
-EXIT_SYS:
-EXIT:
-    for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-        if (fp[chn]) {
-            fclose(fp[chn]);
-            printf("[APP] chn%u file closed (fallback)\n", chn);
-        }
-    }
     if (ret == TD_SUCCESS) {
         printf("[APP] Demo exit normally.\n");
     }

@@ -338,6 +338,84 @@ td_s32 media_mpi_bind_vpss_venc(ot_vpss_grp vpss_grp, ot_vpss_chn vpss_chn, ot_v
  */
 td_s32 media_mpi_unbind_vpss_venc(ot_vpss_grp vpss_grp, ot_vpss_chn vpss_chn, ot_venc_chn venc_chn);
 
+/* ====================================================================
+ *  Pipeline 一体化接口 (初始化 / 反初始化 / 取流线程)
+ * ==================================================================== */
+
+/** 取流回调: 返回 TD_SUCCESS 继续编码, TD_FAILURE 则线程退出 */
+typedef td_s32 (*media_stream_callback)(td_u32 chn, const ot_venc_stream *stream,
+                                         td_void *user_data);
+
+/** 取流线程参数 */
+typedef struct {
+    td_u32                  chn_cnt;    /**< VENC 通道数 */
+    volatile td_bool       *exit_flag;  /**< 退出标志指针 (主线程写入 TD_TRUE 通知退出) */
+    media_stream_callback   callback;   /**< 每帧数据回调 (写文件/发网络) */
+    td_void                *user_data;  /**< 回调上下文 (如 FILE*[] 数组) */
+} media_stream_thread_arg;
+
+/**
+ * @brief  视频管线初始化 (VB + SYS + VI + VPSS + VENC + Bind)
+ *
+ * 按顺序完成: VB init → SYS init → VI start → VPSS grp + chns →
+ *            各通道 VENC create → VI→VPSS 绑定 → VPSS→VENC 绑定
+ *
+ * @param vb_cfg         VB 池配置 (已填充 blk_size/blk_cnt)
+ * @param supplement     VB 补充配置掩码
+ * @param sns_type       Sensor 类型
+ * @param grp_attr       VPSS 组属性
+ * @param chn_attr_arr   VPSS 通道属性数组 (长度 = chn_cnt)
+ * @param venc_attr_arr  VENC 通道属性数组 (长度 = chn_cnt)
+ * @param chn_cnt        编码通道数
+ * @param out_vi_cfg     [out] 传出 VI 配置 (video_deinit 时需要)
+ * @retval TD_SUCCESS 成功
+ * @retval 其他       错误码 (内部已完成部分清理)
+ */
+td_s32 media_pipeline_video_init(const ot_vb_cfg *vb_cfg, td_u32 supplement,
+                                  sample_sns_type sns_type,
+                                  const media_vpss_grp_attr *grp_attr,
+                                  const media_vpss_chn_attr *chn_attr_arr,
+                                  const media_venc_chn_attr *venc_attr_arr,
+                                  td_u32 chn_cnt,
+                                  sample_vi_cfg *out_vi_cfg);
+
+/**
+ * @brief  视频管线反初始化 (逆序: unbind → VENC destroy → VPSS stop → VI stop → SYS exit)
+ *
+ * @param vi_cfg   video_init 时传出的 VI 配置
+ * @param chn_cnt  编码通道数
+ */
+td_void media_pipeline_video_deinit(const sample_vi_cfg *vi_cfg, td_u32 chn_cnt);
+
+/**
+ * @brief  打开各通道输出文件
+ *
+ * @param fps        [out] FILE* 数组, fps[i]=fopen(names[i],"wb")
+ * @param file_names 文件名数组 (长度 = chn_cnt)
+ * @param chn_cnt    通道数
+ * @retval TD_SUCCESS       全部打开成功
+ * @retval TD_FAILURE       某个文件打开失败 (已打开的会关闭)
+ */
+td_s32 media_pipeline_stream_init(FILE **fps, const td_char **file_names, td_u32 chn_cnt);
+
+/**
+ * @brief  关闭各通道输出文件
+ *
+ * @param fps      FILE* 数组
+ * @param chn_cnt  通道数
+ */
+td_void media_pipeline_stream_deinit(FILE **fps, td_u32 chn_cnt);
+
+/**
+ * @brief  取流线程入口 (供 pthread_create 调用)
+ *
+ * 循环从每个 VENC 通道取帧 → 调 callback → release, 直到 exit_flag 置位。
+ *
+ * @param arg   media_stream_thread_arg* 指针
+ * @return      NULL
+ */
+td_void *media_pipeline_stream_thread(td_void *arg);
+
 #ifdef __cplusplus
 }
 #endif
