@@ -28,13 +28,14 @@ static volatile td_bool g_exit_flag = TD_FALSE;
 static td_void app_sig_handler(td_s32 signo)
 {
     if (signo == SIGINT || signo == SIGTERM) {
-        DBG_WARN("APP", "catch SIGINT/SIGTERM, exiting...\n");
+        DBG_WARN("APP", "catch SIGINT/SIGTERM, exiting...");
         g_exit_flag = TD_TRUE;
     }
 }
 
 static td_void app_signal_init(td_void)
 {
+    signal(SIGCHLD, SIG_IGN);
     signal(SIGINT,  app_sig_handler);
     signal(SIGTERM, app_sig_handler);
 }
@@ -163,14 +164,14 @@ static td_void app_print_banner(td_void)
     td_u32 chn;
     const td_char *type_str;
 
-    DBG_LOG("APP", "========================================\n");
-    DBG_LOG("APP", "  Hi3516CV610 Encode  (%u channel%s)\n",
+    DBG_LOG("APP", "========================================");
+    DBG_LOG("APP", "  Hi3516CV610 Encode  (%u channel%s)",
            (td_u32)APP_VENC_CHN_CNT, APP_VENC_CHN_CNT > 1 ? "s" : "");
-    DBG_LOG("APP", "  IR Auto : enabled (QFN GPIO %u+%u)\n", IR_GPIO_NUM_A, IR_GPIO_NUM_B);
+    DBG_LOG("APP", "  IR Auto : enabled (QFN GPIO %u+%u)", IR_GPIO_NUM_A, IR_GPIO_NUM_B);
     for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
         type_str = (g_chn_cfg[chn].type == OT_PT_H265) ? "H.265" :
                    (g_chn_cfg[chn].type == OT_PT_H264) ? "H.264" : "???";
-        DBG_LOG("APP", "  chn%u: %s %dx%d @ %dfps, %s %d Kbps\n",
+        DBG_LOG("APP", "  chn%u: %s %dx%d @ %dfps, %s %d Kbps",
                chn, type_str,
                g_chn_cfg[chn].width, g_chn_cfg[chn].height,
                g_chn_cfg[chn].fps,
@@ -182,7 +183,7 @@ static td_void app_print_banner(td_void)
                g_chn_cfg[chn].rc_mode == SAMPLE_RC_ABR  ? "ABR"  : "RC?",
                g_chn_cfg[chn].bitrate);
     }
-    DBG_LOG("APP", "========================================\n");
+    DBG_LOG("APP", "========================================");
 }
 
 /* ====================================================================
@@ -237,19 +238,19 @@ static td_s32 app_run(td_void)
             APP_SNS_TYPE, &grp_attr, chn_attr, venc_attr,
             APP_VENC_CHN_CNT, &vi_cfg);
     if (ret != TD_SUCCESS) {
-        DBG_ERROR("APP", "video init failed: 0x%x\n", ret);
+        DBG_ERROR("APP", "video init failed: 0x%x", ret);
         return -1;
     }
-    DBG_LOG("APP", "Pipeline video init OK\n");
+    DBG_LOG("APP", "Pipeline video init OK");
 
     /* ---- 3. IR Auto ---- */
     ret = ir_auto_init(0);
     if (ret != TD_SUCCESS) { goto EXIT_VIDEO; }
-    DBG_LOG("APP", "IR Auto init OK\n");
+    DBG_LOG("APP", "IR Auto init OK");
 
     ret = ir_auto_start();
     if (ret != TD_SUCCESS) { goto EXIT_IR_DEINIT; }
-    DBG_LOG("APP", "IR Auto thread started\n");
+    DBG_LOG("APP", "IR Auto thread started");
 
     /* ---- 4. 打开输出文件 ---- */
     for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
@@ -270,14 +271,14 @@ static td_s32 app_run(td_void)
     ret = thread_create(&stream_thread, "enc_stream", 32768,
                         media_pipeline_stream_thread, &stream_arg);
     if (ret != TD_SUCCESS) { goto EXIT_FILE; }
-    DBG_LOG("APP", "Encoding... press Ctrl+C to stop\n");
+    DBG_LOG("APP", "Encoding... press Ctrl+C to stop");
 
     /* ---- 6. 等待退出信号 ---- */
     while (!g_exit_flag) {
         usleep(100000);
     }
 
-    DBG_LOG("APP", "Stopping...\n");
+    DBG_LOG("APP", "Stopping...");
 
     /* ---- 7. 等待取流线程结束 ---- */
     thread_join(stream_thread);
@@ -292,7 +293,7 @@ EXIT_VIDEO:
     media_pipeline_video_deinit(&vi_cfg, APP_VENC_CHN_CNT);
 
     if (ret == TD_SUCCESS) {
-        DBG_LOG("APP", "Demo exit normally.\n");
+        DBG_LOG("APP", "Demo exit normally.");
     }
     return (ret == TD_SUCCESS) ? 0 : -1;
 }
@@ -305,7 +306,13 @@ int main(int argc, char **argv)
     (td_void)argc;
     (td_void)argv;
 
+    dbg_init();
+
     app_signal_init();
     app_print_banner();
-    return app_run();
+    {
+        td_s32 rc = app_run();
+        dbg_deinit();
+        return rc;
+    }
 }

@@ -48,7 +48,7 @@ static void gpio_export(td_u32 gpio_num)
 {
     FILE *fp = fopen("/sys/class/gpio/export", "w");
     if (fp == NULL) {
-        DBG_ERROR("IR", "gpio%u export open failed: %s\n", gpio_num, strerror(errno));
+        DBG_ERROR("IR", "gpio%u export open failed: %s", gpio_num, strerror(errno));
         return;
     }
     fprintf(fp, "%u", gpio_num);
@@ -65,7 +65,7 @@ static void gpio_set_dir_out(td_u32 gpio_num)
     snprintf(path, sizeof(path), "/sys/class/gpio/gpio%u/direction", gpio_num);
     FILE *fp = fopen(path, "w");
     if (fp == NULL) {
-        DBG_ERROR("IR", "gpio%u dir open failed: %s\n", gpio_num, strerror(errno));
+        DBG_ERROR("IR", "gpio%u dir open failed: %s", gpio_num, strerror(errno));
         return;
     }
     fprintf(fp, "out");
@@ -83,12 +83,12 @@ static void gpio_write(td_u32 gpio_num, td_u32 value)
     snprintf(path, sizeof(path), "/sys/class/gpio/gpio%u/value", gpio_num);
     FILE *fp = fopen(path, "w");
     if (fp == NULL) {
-        DBG_ERROR("IR", "gpio%u value open failed: %s\n", gpio_num, strerror(errno));
+        DBG_ERROR("IR", "gpio%u value open failed: %s", gpio_num, strerror(errno));
         return;
     }
     fprintf(fp, "%u", value);
     fclose(fp);
-    DBG_LOG("IR", "gpio%u = %u\n", gpio_num, value);
+    DBG_LOG("IR", "gpio%u = %u", gpio_num, value);
 }
 
 /**
@@ -121,7 +121,7 @@ static td_s32 isp_set_ccm_identity(ot_vi_pipe vi_pipe)
 
     ret = ss_mpi_isp_get_ccm_attr(vi_pipe, &ccm_attr);
     if (ret != TD_SUCCESS) {
-        DBG_ERROR("IR", "get ccm_attr failed: 0x%x\n", ret);
+        DBG_ERROR("IR", "get ccm_attr failed: 0x%x", ret);
         return ret;
     }
 
@@ -139,7 +139,7 @@ static td_s32 isp_set_ccm_identity(ot_vi_pipe vi_pipe)
 
     ret = ss_mpi_isp_set_ccm_attr(vi_pipe, &ccm_attr);
     if (ret != TD_SUCCESS) {
-        DBG_ERROR("IR", "set ccm_attr(identity) failed: 0x%x\n", ret);
+        DBG_ERROR("IR", "set ccm_attr(identity) failed: 0x%x", ret);
     }
     return ret;
 }
@@ -158,26 +158,26 @@ static td_s32 isp_switch_to_ir(ot_vi_pipe vi_pipe)
     ot_isp_wb_attr         wb_attr;
     td_s32 ret;
 
-    DBG_LOG("IR", "--->> switching to IR mode --->>\n");
+    DBG_LOG("IR", "--->> switching to IR mode --->>");
 
     /* 1. 饱和度 = 0 (手动, 黑白) */
     ret = ss_mpi_isp_get_saturation_attr(vi_pipe, &sat_attr);
     if (ret != TD_SUCCESS) {
-        DBG_ERROR("IR", "get saturation_attr failed: 0x%x\n", ret);
+        DBG_ERROR("IR", "get saturation_attr failed: 0x%x", ret);
         return ret;
     }
     sat_attr.op_type = OT_OP_MODE_MANUAL;
     sat_attr.manual_attr.saturation = 0;
     ret = ss_mpi_isp_set_saturation_attr(vi_pipe, &sat_attr);
     if (ret != TD_SUCCESS) {
-        DBG_ERROR("IR", "set saturation_attr(0) failed: 0x%x\n", ret);
+        DBG_ERROR("IR", "set saturation_attr(0) failed: 0x%x", ret);
         return ret;
     }
 
     /* 2. WB = R=G=B=1.0 (手动) */
     ret = ss_mpi_isp_get_wb_attr(vi_pipe, &wb_attr);
     if (ret != TD_SUCCESS) {
-        DBG_ERROR("IR", "get wb_attr failed: 0x%x\n", ret);
+        DBG_ERROR("IR", "get wb_attr failed: 0x%x", ret);
         return ret;
     }
     wb_attr.op_type = OT_OP_MODE_MANUAL;
@@ -187,7 +187,7 @@ static td_s32 isp_switch_to_ir(ot_vi_pipe vi_pipe)
     wb_attr.manual_attr.b_gain  = 0x100;
     ret = ss_mpi_isp_set_wb_attr(vi_pipe, &wb_attr);
     if (ret != TD_SUCCESS) {
-        DBG_ERROR("IR", "set wb_attr(1.0) failed: 0x%x\n", ret);
+        DBG_ERROR("IR", "set wb_attr(1.0) failed: 0x%x", ret);
         return ret;
     }
 
@@ -207,7 +207,7 @@ static td_s32 isp_switch_to_ir(ot_vi_pipe vi_pipe)
     gpio_write(IR_GPIO_NUM_A, 0);
     gpio_write(IR_GPIO_NUM_B, 0);
 
-    DBG_LOG("IR", "--->> IR mode active --->>\n");
+    DBG_LOG("IR", "--->> IR mode active --->>");
     return TD_SUCCESS;
 }
 
@@ -226,7 +226,7 @@ static td_s32 isp_switch_to_normal(ot_vi_pipe vi_pipe)
     ot_isp_color_matrix_attr ccm_attr;
     td_s32 ret;
 
-    DBG_LOG("IR", "<<--- switching to normal mode <<---\n");
+    DBG_LOG("IR", "<<--- switching to normal mode <<---");
 
     /* 1. GPIO 先切 IRCUT 回可见光 */
     gpio_write(IR_GPIO_NUM_B, 1);
@@ -253,7 +253,7 @@ static td_s32 isp_switch_to_normal(ot_vi_pipe vi_pipe)
         ss_mpi_isp_set_ccm_attr(vi_pipe, &ccm_attr);
     }
 
-    DBG_LOG("IR", "<<--- normal mode active <<---\n");
+    DBG_LOG("IR", "<<--- normal mode active <<---");
     return TD_SUCCESS;
 }
 
@@ -275,7 +275,7 @@ static void *ir_auto_thread_func(void *arg)
     (td_void)arg;
 
     thread_set_name("ir_auto");
-    DBG_LOG("IR", "thread started, vi_pipe=%u\n", g_ir_vi_pipe);
+    DBG_LOG("IR", "thread started, vi_pipe=%u", g_ir_vi_pipe);
 
     /* 构造 ir_auto 属性 (SDK 输入参数) */
     ot_isp_ir_auto_attr ir_attr;
@@ -293,22 +293,22 @@ static void *ir_auto_thread_func(void *arg)
 
         td_s32 ret = ss_mpi_isp_ir_auto(g_ir_vi_pipe, &ir_attr);
         if (ret != TD_SUCCESS) {
-            DBG_ERROR("IR", "ss_mpi_isp_ir_auto failed: 0x%x\n", ret);
+            DBG_ERROR("IR", "ss_mpi_isp_ir_auto failed: 0x%x", ret);
             continue;
         }
 
         if (ir_attr.ir_switch == OT_ISP_IR_SWITCH_TO_IR) {
-            DBG_LOG("IR", "===== DAY -> NIGHT =====\n");
+            DBG_LOG("IR", "===== DAY -> NIGHT =====");
             isp_switch_to_ir(g_ir_vi_pipe);
             ir_attr.ir_status = OT_ISP_IR_STATUS_IR;
         } else if (ir_attr.ir_switch == OT_ISP_IR_SWITCH_TO_NORMAL) {
-            DBG_LOG("IR", "===== NIGHT -> DAY =====\n");
+            DBG_LOG("IR", "===== NIGHT -> DAY =====");
             isp_switch_to_normal(g_ir_vi_pipe);
             ir_attr.ir_status = OT_ISP_IR_STATUS_NORMAL;
         }
     }
 
-    DBG_LOG("IR", "thread exited\n");
+    DBG_LOG("IR", "thread exited");
     return NULL;
 }
 
@@ -338,7 +338,7 @@ td_s32 ir_auto_init(ot_vi_pipe vi_pipe)
     g_ir_running    = 0;
 
     DBG_LOG("IR", "init OK, vi_pipe=%u, gpio=%u/%u, "
-           "iso_thr=%u/%u, rg=[%u,%u], bg=[%u,%u]\n",
+           "iso_thr=%u/%u, rg=[%u,%u], bg=[%u,%u]",
            vi_pipe, IR_GPIO_NUM_A, IR_GPIO_NUM_B,
            IR_NORMAL_TO_IR_ISO, IR_IR_TO_NORMAL_ISO,
            IR_RG_MIN, IR_RG_MAX, IR_BG_MIN, IR_BG_MAX);
@@ -349,7 +349,7 @@ td_s32 ir_auto_init(ot_vi_pipe vi_pipe)
 td_s32 ir_auto_start(td_void)
 {
     if (g_ir_running) {
-        DBG_WARN("IR", "already running\n");
+        DBG_WARN("IR", "already running");
         return TD_SUCCESS;
     }
 
@@ -362,13 +362,13 @@ td_s32 ir_auto_start(td_void)
         return TD_FAILURE;
     }
 
-    DBG_LOG("IR", "auto thread created\n");
+    DBG_LOG("IR", "auto thread created");
     return TD_SUCCESS;
 }
 
 td_void ir_auto_stop(td_void)
 {
-    DBG_LOG("IR", "stopping...\n");
+    DBG_LOG("IR", "stopping...");
 
     if (g_ir_running) {
         g_ir_running = 0;
@@ -380,8 +380,8 @@ td_void ir_auto_stop(td_void)
         gpio_unexport(IR_GPIO_NUM_A);
         gpio_unexport(IR_GPIO_NUM_B);
         g_gpio_exported = 0;
-        DBG_LOG("IR", "GPIO unexported\n");
+        DBG_LOG("IR", "GPIO unexported");
     }
 
-    DBG_LOG("IR", "stopped\n");
+    DBG_LOG("IR", "stopped");
 }

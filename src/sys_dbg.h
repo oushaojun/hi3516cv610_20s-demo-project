@@ -1,16 +1,24 @@
 /**
  * @file    dbg.h
- * @brief   Hi3516CV610 调试日志模块
+ * @brief   Hi3516CV610 调试日志模块 — syslog 后端 + stdout 降级
  *
- * 支持 6 级日志，带颜色、文件名、行号、模块名。
+ * 默认通过 syslog() 写入 syslogd 环形缓冲，用 logread 查看。
+ * 若 syslogd 启动失败，自动降级为 stdout/stderr 带 ANSI 颜色输出。
  *
  * 用法:
- *   DBG_LOG("APP", "VB init OK\n");
- *   DBG_WARN("MEDIA", "get_rc_param failed: 0x%x\n", ret);
- *   DBG_ERROR("IR", "ss_mpi_isp_ir_auto failed: 0x%x\n", ret);
+ *   dbg_init();                        // 初始化
+ *   DBG_LOG("APP", "VB init OK");
+ *   DBG_WARN("MEDIA", "fail: 0x%x", ret);
+ *   dbg_deinit();                      // 清理
  *
- * 颜色 (ANSI):
- *   TRACE: 灰色  DEBUG: 青色  LOG: 无色  WARN: 黄色  ERROR: 红色  FATAL: 粗红
+ * logread 输出格式:
+ *   May 15 20:07:28 user.info hi3516_project[963]: 2026-05-15 20:07:28.456 [LOG] func() file:line (MOD) message
+ *
+ * stdout 降级格式:
+ *   [LOG] 2026-05-15 20:07:28.456 func() file:line (MOD) message   (带 ANSI 颜色)
+ *
+ * 强制 stdout 模式 (跳过 syslogd): 取消下面这行的注释即可
+ *   #define DBG_FORCE_STDOUT
  */
 
 #ifndef SYS_DBG_H
@@ -67,8 +75,8 @@ typedef enum {
 /**
  * @brief  带等级/模块/文件/行号的结构化日志输出
  *
- * 格式: [LEVEL] YYYY-MM-DD HH:MM:SS.mmm func() file:line (module) message
- * 颜色: ANSI escape 序列, ERROR/FATAL 定向到 stderr
+ * syslog 格式: 2026-05-15 20:07:28.456 [LEVEL] func() file:line (MOD) message
+ * stdout 格式: [LEVEL] 2026-05-15 20:07:28.456 func() file:line (MOD) message (带颜色)
  *
  * @param lvl   日志等级
  * @param mod   模块名 (如 "APP" "MEDIA" "IR")
@@ -82,6 +90,26 @@ td_void _dbg_print(dbg_level_t lvl, const td_char *mod,
                     const td_char *func,
                     const td_char *file, td_s32 line,
                     const td_char *fmt, ...);
+
+/* ====================================================================
+ *  生命周期
+ * ==================================================================== */
+
+/**
+ * @brief  初始化日志系统，启动 syslogd 并 openlog
+ * @return TD_SUCCESS
+ */
+td_s32 dbg_init(td_void);
+
+/**
+ * @brief  清理日志系统，closelog
+ */
+td_void dbg_deinit(td_void);
+
+
+/** 是否强制使用 stdout 模式 (跳过 syslogd) */
+#define DBG_FORCE_STDOUT 0
+
 
 #ifdef __cplusplus
 #if __cplusplus

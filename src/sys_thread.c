@@ -26,7 +26,7 @@ td_s32 thread_create(thread_t *t, const td_char *name, td_u32 stack_size,
     pthread_attr_destroy(&attr);
 
     if (ret != 0) {
-        DBG_ERROR("THREAD", "create '%s' failed: %d (%s)\n",
+        DBG_ERROR("THREAD", "create '%s' failed: %d (%s)",
                   name, ret, strerror(ret));
         t->tid = 0;
         return TD_FAILURE;
