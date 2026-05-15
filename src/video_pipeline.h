@@ -1,5 +1,5 @@
 /**
- * @file    venc_pipeline.h
+ * @file    video_pipeline.h
  * @brief   Hi3516CV610 媒体模块接口 (media_module)
  *
  * 提供 VI / VPSS / VENC 的细粒度初始化与控制接口。
@@ -50,8 +50,8 @@
  * 应用层在取流循环中轮询各个 VENC 通道 (timeout=0 非阻塞)。
  */
 
-#ifndef VENC_PIPELINE_H
-#define VENC_PIPELINE_H
+#ifndef VIDEO_PIPELINE_H
+#define VIDEO_PIPELINE_H
 
 #include "sample_comm.h"
 
@@ -420,4 +420,4 @@ td_void *media_pipeline_stream_thread(td_void *arg);
 }
 #endif
 
-#endif /* VENC_PIPELINE_H */
+#endif /* VIDEO_PIPELINE_H */

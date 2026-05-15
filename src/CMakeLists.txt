@@ -36,9 +36,10 @@ set(APP_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 # ---- hi3516_project —— 编码测试入口 (使用 venc_pipeline 模块) ----------
 add_executable(hi3516_project
     ${APP_SRC_DIR}/main.c
-    ${APP_SRC_DIR}/venc_pipeline.c
-    ${APP_SRC_DIR}/ir_auto.c
-    ${APP_SRC_DIR}/dbg.c
+    ${APP_SRC_DIR}/video_pipeline.c
+    ${APP_SRC_DIR}/camera_ir.c
+    ${APP_SRC_DIR}/sys_dbg.c
+    ${APP_SRC_DIR}/sys_thread.c
 )
 
 # SDK 库列表 (供 STATIC/SHARED 两种链接模式共用)

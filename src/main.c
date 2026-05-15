@@ -15,11 +15,11 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
-#include <pthread.h>
 
 #include "app_config.h"
-#include "ir_auto.h"
-#include "dbg.h"
+#include "camera_ir.h"
+#include "sys_dbg.h"
+#include "sys_thread.h"
 
 /* ===== 应用层全局状态 ===== */
 static volatile td_bool g_exit_flag = TD_FALSE;
@@ -199,7 +199,7 @@ static td_s32 app_run(td_void)
     FILE               *fp[3] = { TD_NULL, TD_NULL, TD_NULL };
     td_char             file_name[128];
     const td_char      *file_names[3];
-    pthread_t           stream_tid  = 0;
+    thread_t            stream_thread;
     media_stream_thread_arg stream_arg;
     td_u32              chn;
 
@@ -267,12 +267,9 @@ static td_s32 app_run(td_void)
     stream_arg.callback  = app_write_stream;
     stream_arg.user_data = fp;
 
-    ret = pthread_create(&stream_tid, TD_NULL,
-                         media_pipeline_stream_thread, &stream_arg);
-    if (ret != 0) {
-        DBG_ERROR("APP", "stream thread create failed: %d\n", ret);
-        goto EXIT_FILE;
-    }
+    ret = thread_create(&stream_thread, "enc_stream", 32768,
+                        media_pipeline_stream_thread, &stream_arg);
+    if (ret != TD_SUCCESS) { goto EXIT_FILE; }
     DBG_LOG("APP", "Encoding... press Ctrl+C to stop\n");
 
     /* ---- 6. 等待退出信号 ---- */
@@ -283,7 +280,7 @@ static td_s32 app_run(td_void)
     DBG_LOG("APP", "Stopping...\n");
 
     /* ---- 7. 等待取流线程结束 ---- */
-    pthread_join(stream_tid, TD_NULL);
+    thread_join(stream_thread);
 
     /* ---- 8. 逆序清理 ---- */
     media_pipeline_stream_deinit(fp, APP_VENC_CHN_CNT);

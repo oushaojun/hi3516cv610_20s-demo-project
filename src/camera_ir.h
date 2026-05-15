@@ -11,8 +11,8 @@
  *   GPIO: QFN板子 gpio7_7 + gpio1_0
  */
 
-#ifndef IR_AUTO_H
-#define IR_AUTO_H
+#ifndef CAMERA_IR_H
+#define CAMERA_IR_H
 
 #include "ot_common_isp.h"
 #include "ot_common_vi.h"

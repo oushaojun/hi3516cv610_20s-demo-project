@@ -1,5 +1,5 @@
 /**
- * @file    dbg.c
+ * @file    sys_dbg.c
  * @brief   Hi3516CV610 调试日志模块实现
  *
  * 支持 6 级日志等级，ANSI 8 色终端，ERROR/FATAL 定向到 stderr。
@@ -9,7 +9,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
-#include "dbg.h"
+#include "sys_dbg.h"
 
 /* ====================================================================
  *  内部辅助

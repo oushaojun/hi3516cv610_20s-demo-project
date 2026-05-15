@@ -1,5 +1,5 @@
 /**
- * @file    venc_pipeline.c
+ * @file    video_pipeline.c
  * @brief   Hi3516CV610 媒体模块实现
  *
  * 提供 VI / VPSS / VENC / Bind 的细粒度接口。
@@ -12,13 +12,13 @@
 #include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
-#include <sys/prctl.h>
 #include <sys/select.h>
 
-#include "venc_pipeline.h"
+#include "video_pipeline.h"
 #include "sample_comm.h"
 #include "securec.h"
-#include "dbg.h"
+#include "sys_dbg.h"
+#include "sys_thread.h"
 
 #include "ss_mpi_sys.h"
 #include "ss_mpi_vb.h"
@@ -776,7 +776,7 @@ td_void *media_pipeline_stream_thread(td_void *arg)
     ot_venc_stream  stream;
     td_s32          ret;
 
-    prctl(PR_SET_NAME, "enc_stream", 0, 0, 0);
+    thread_set_name("enc_stream");
 
     timeout_ms = (targ->chn_cnt == 1) ? 2000 : 0;
 

@@ -16,7 +16,7 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
-#include "venc_pipeline.h"
+#include "video_pipeline.h"
 
 /* ====================================================================
  *  传感器 / VI 输入

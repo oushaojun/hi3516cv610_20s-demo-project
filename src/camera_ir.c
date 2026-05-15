@@ -1,5 +1,5 @@
 /**
- * @file    ir_auto.c
+ * @file    camera_ir.c
  * @brief   Hi3516CV610 IRCUT 红外自动切换模块实现
  *
  * 职责：
@@ -17,22 +17,22 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <pthread.h>
-#include <sys/prctl.h>
 
 #include "ss_mpi_isp.h"
 #include "ss_mpi_awb.h"
 #include "ot_common_isp.h"
 
-#include "ir_auto.h"
-#include "dbg.h"
+#include "camera_ir.h"
+#include "sys_dbg.h"
+#include "sys_thread.h"
+#include "securec.h"
 
 /* ====================================================================
  *  内部状态
  * ==================================================================== */
 
 static ot_vi_pipe     g_ir_vi_pipe = 0;        /**< VI Pipe 号 */
-static pthread_t      g_ir_thread  = 0;        /**< IR 自动线程 */
+static thread_t       g_ir_thread;             /**< IR 自动线程 */
 static volatile int   g_ir_running = 0;        /**< 线程运行标志 */
 static int            g_gpio_exported = 0;     /**< GPIO 是否已导出 */
 
@@ -274,7 +274,7 @@ static void *ir_auto_thread_func(void *arg)
 {
     (td_void)arg;
 
-    prctl(PR_SET_NAME, "ir_auto", 0, 0, 0);
+    thread_set_name("ir_auto");
     DBG_LOG("IR", "thread started, vi_pipe=%u\n", g_ir_vi_pipe);
 
     /* 构造 ir_auto 属性 (SDK 输入参数) */
@@ -355,10 +355,9 @@ td_s32 ir_auto_start(td_void)
 
     g_ir_running = 1;
 
-    td_s32 ret = pthread_create(&g_ir_thread, NULL,
-                                ir_auto_thread_func, NULL);
-    if (ret != 0) {
-        DBG_ERROR("IR", "thread create failed: %d (%s)\n", ret, strerror(ret));
+    td_s32 ret = thread_create(&g_ir_thread, "ir_auto", 16384,
+                               ir_auto_thread_func, NULL);
+    if (ret != TD_SUCCESS) {
         g_ir_running = 0;
         return TD_FAILURE;
     }
@@ -373,10 +372,8 @@ td_void ir_auto_stop(td_void)
 
     if (g_ir_running) {
         g_ir_running = 0;
-        if (g_ir_thread) {
-            pthread_join(g_ir_thread, NULL);
-            g_ir_thread = 0;
-        }
+        thread_join(g_ir_thread);
+        (td_void)memset_s(&g_ir_thread, sizeof(g_ir_thread), 0, sizeof(g_ir_thread));
     }
 
     if (g_gpio_exported) {

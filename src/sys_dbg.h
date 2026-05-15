@@ -13,8 +13,8 @@
  *   TRACE: 灰色  DEBUG: 青色  LOG: 无色  WARN: 黄色  ERROR: 红色  FATAL: 粗红
  */
 
-#ifndef DBG_H
-#define DBG_H
+#ifndef SYS_DBG_H
+#define SYS_DBG_H
 
 #include <stdio.h>
 #include "ot_type.h"
@@ -89,4 +89,4 @@ td_void _dbg_print(dbg_level_t lvl, const td_char *mod,
 #endif
 #endif /* __cplusplus */
 
-#endif /* DBG_H */
+#endif /* SYS_DBG_H */
