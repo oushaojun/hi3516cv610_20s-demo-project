@@ -40,6 +40,7 @@ add_executable(hi3516_project
     ${APP_SRC_DIR}/camera_ir.c
     ${APP_SRC_DIR}/sys_dbg.c
     ${APP_SRC_DIR}/sys_thread.c
+    ${APP_SRC_DIR}/sys_notify.c
     ${APP_SRC_DIR}/sys_discovery_serv.c
 )
 

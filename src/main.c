@@ -20,6 +20,7 @@
 #include "camera_ir.h"
 #include "sys_discovery_serv.h"
 #include "sys_dbg.h"
+#include "sys_notify.h"
 #include "sys_thread.h"
 
 /* ===== 应用层全局状态 ===== */
@@ -311,6 +312,7 @@ int main(int argc, char **argv)
     (td_void)argv;
 
     dbg_init();
+    sys_notify_init();
 
     /* 填充 discovery 通道配置 */
     {
@@ -331,6 +333,7 @@ int main(int argc, char **argv)
     {
         td_s32 rc = app_run();
         discovery_serv_deinit();
+        sys_notify_deinit();
         dbg_deinit();
         return rc;
     }
