@@ -9,7 +9,7 @@
  *   - 视频配置 (sensor/VI/各通道编码参数)
  *   - 时间戳 (毫秒)
  */
-
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
