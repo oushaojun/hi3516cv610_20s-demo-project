@@ -21,7 +21,9 @@
 #include "sys_discovery_serv.h"
 #include "sys_dbg.h"
 #include "sys_notify.h"
+#include "sys_sd.h"
 #include "sys_thread.h"
+#include "sys_uevent.h"
 
 /* ===== 应用层全局状态 ===== */
 static volatile td_bool g_exit_flag = TD_FALSE;
@@ -313,6 +315,8 @@ int main(int argc, char **argv)
 
     dbg_init();
     sys_notify_init();
+    sys_uevent_init();
+    sys_sd_init();
 
     /* 填充 discovery 通道配置 */
     {
@@ -333,6 +337,8 @@ int main(int argc, char **argv)
     {
         td_s32 rc = app_run();
         discovery_serv_deinit();
+        sys_sd_deinit();
+        sys_uevent_deinit();
         sys_notify_deinit();
         dbg_deinit();
         return rc;

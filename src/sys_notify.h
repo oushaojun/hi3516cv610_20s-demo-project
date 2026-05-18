@@ -70,6 +70,8 @@ typedef enum {
 #define SYS_NOTIFY_SYSTEM_CPU_HIGH       (1 << 0)  /**< CPU 占用过高 */
 #define SYS_NOTIFY_SYSTEM_MEM_LOW        (1 << 1)  /**< 可用内存过低 */
 #define SYS_NOTIFY_SYSTEM_TEMP_HIGH      (1 << 2)  /**< 芯片温度过高 */
+#define SYS_NOTIFY_SYSTEM_SD_INSERT      (1 << 3)  /**< SD 卡插入并挂载成功 */
+#define SYS_NOTIFY_SYSTEM_SD_REMOVE      (1 << 4)  /**< SD 卡拔出并卸载成功 */
 
 /** SYS_NOTIFY_DISCOVER — 设备发现子事件 */
 #define SYS_NOTIFY_DISCOVER_QUERY        (1 << 0)  /**< 收到客户端查询 */
