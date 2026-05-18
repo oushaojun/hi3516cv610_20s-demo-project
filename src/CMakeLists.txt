@@ -40,6 +40,7 @@ add_executable(hi3516_project
     ${APP_SRC_DIR}/camera_ir.c
     ${APP_SRC_DIR}/sys_dbg.c
     ${APP_SRC_DIR}/sys_thread.c
+    ${APP_SRC_DIR}/sys_discovery_serv.c
 )
 
 # SDK 库列表 (供 STATIC/SHARED 两种链接模式共用)
@@ -155,3 +156,15 @@ target_include_directories(hi3516_project PRIVATE
 target_compile_definitions(hi3516_project PRIVATE
     SENSOR0_TYPE=${SENSOR0_TYPE}
 )
+
+# ---- sys_discovery_cli —— 设备发现客户端工具 (host gcc 编译) -------------------
+set(CLI_SRC  ${CMAKE_SOURCE_DIR}/tools/sys_discovery_cli.c)
+set(CLI_OUT  ${CMAKE_BINARY_DIR}/tools/sys_discovery_cli)
+
+add_custom_command(
+    OUTPUT ${CLI_OUT}
+    COMMAND gcc -Wall -O2 -o ${CLI_OUT} ${CLI_SRC} -lpthread
+    DEPENDS ${CLI_SRC}
+    COMMENT "Building sys_discovery_cli (host gcc)..."
+)
+add_custom_target(sys_discovery_cli ALL DEPENDS ${CLI_OUT})

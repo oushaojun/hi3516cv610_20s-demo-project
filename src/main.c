@@ -18,6 +18,7 @@
 
 #include "app_config.h"
 #include "camera_ir.h"
+#include "sys_discovery_serv.h"
 #include "sys_dbg.h"
 #include "sys_thread.h"
 
@@ -94,6 +95,9 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
         APP_FILE_PREFIX2
     },
 };
+
+/* 供 discovery 模块使用的通道配置摘要 */
+static discovery_chn_cfg_t g_disc_cfg[3];
 
 /* ===== 码流写出 ===== */
 
@@ -308,10 +312,25 @@ int main(int argc, char **argv)
 
     dbg_init();
 
+    /* 填充 discovery 通道配置 */
+    {
+        td_u32 i;
+        for (i = 0; i < APP_VENC_CHN_CNT && i < 3; i++) {
+            g_disc_cfg[i].type    = g_chn_cfg[i].type;
+            g_disc_cfg[i].width   = g_chn_cfg[i].width;
+            g_disc_cfg[i].height  = g_chn_cfg[i].height;
+            g_disc_cfg[i].fps     = g_chn_cfg[i].fps;
+            g_disc_cfg[i].bitrate = g_chn_cfg[i].bitrate;
+            g_disc_cfg[i].rc_mode = g_chn_cfg[i].rc_mode;
+        }
+        discovery_serv_init(g_disc_cfg, APP_VENC_CHN_CNT);
+    }
+
     app_signal_init();
     app_print_banner();
     {
         td_s32 rc = app_run();
+        discovery_serv_deinit();
         dbg_deinit();
         return rc;
     }
