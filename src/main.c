@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <time.h>
 
 #include "app_config.h"
 #include "camera_ir.h"
@@ -24,9 +25,13 @@
 #include "sys_sd.h"
 #include "sys_thread.h"
 #include "sys_uevent.h"
+#include "video_dispatcher.h"
+#include "video_pipeline.h"
 
 /* ===== 应用层全局状态 ===== */
 static volatile td_bool g_exit_flag = TD_FALSE;
+static volatile td_bool g_producer_running = TD_FALSE;
+static dispatcher_t    g_dispatcher;
 
 /* ===== 信号处理 ===== */
 static td_void app_sig_handler(td_s32 signo)
@@ -65,8 +70,6 @@ typedef struct {
     td_u32             vpss_depth;
     td_u32             vpss_src_fps;   /**< VPSS chn 源帧率 (= APP_SENSOR_FPS) */
     td_u32             vpss_dst_fps;   /**< VPSS chn 目标帧率 (= APP_VENCx_FPS) */
-    /* 输出 */
-    const td_char     *file_prefix;
 } app_chn_cfg_t;
 
 static const app_chn_cfg_t g_chn_cfg[3] = {
@@ -76,8 +79,7 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
         APP_VENC0_RC_MODE, APP_VENC0_PROFILE, APP_VENC0_GOP_MODE,
         APP_VPSS_CHN0_W, APP_VPSS_CHN0_H,
         APP_VPSS_CHN0_PIX_FMT, APP_VPSS_CHN0_COMPRESS, APP_VPSS_CHN0_DEPTH,
-        APP_VPSS_CHN0_SRC_FPS, APP_VPSS_CHN0_DST_FPS,
-        APP_FILE_PREFIX0
+        APP_VPSS_CHN0_SRC_FPS, APP_VPSS_CHN0_DST_FPS
     },
     {
         APP_VENC1_TYPE, APP_VENC1_WIDTH, APP_VENC1_HEIGHT,
@@ -85,8 +87,7 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
         APP_VENC1_RC_MODE, APP_VENC1_PROFILE, APP_VENC1_GOP_MODE,
         APP_VPSS_CHN1_W, APP_VPSS_CHN1_H,
         APP_VPSS_CHN1_PIX_FMT, APP_VPSS_CHN1_COMPRESS, APP_VPSS_CHN1_DEPTH,
-        APP_VPSS_CHN1_SRC_FPS, APP_VPSS_CHN1_DST_FPS,
-        APP_FILE_PREFIX1
+        APP_VPSS_CHN1_SRC_FPS, APP_VPSS_CHN1_DST_FPS
     },
     {
         APP_VENC2_TYPE, APP_VENC2_WIDTH, APP_VENC2_HEIGHT,
@@ -94,39 +95,12 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
         APP_VENC2_RC_MODE, APP_VENC2_PROFILE, APP_VENC2_GOP_MODE,
         APP_VPSS_CHN2_W, APP_VPSS_CHN2_H,
         APP_VPSS_CHN2_PIX_FMT, APP_VPSS_CHN2_COMPRESS, APP_VPSS_CHN2_DEPTH,
-        APP_VPSS_CHN2_SRC_FPS, APP_VPSS_CHN2_DST_FPS,
-        APP_FILE_PREFIX2
+        APP_VPSS_CHN2_SRC_FPS, APP_VPSS_CHN2_DST_FPS
     },
 };
 
 /* 供 discovery 模块使用的通道配置摘要 */
 static discovery_chn_cfg_t g_disc_cfg[3];
-
-/* ===== 码流写出 ===== */
-
-/**
- * @brief  将一帧编码数据写入文件
- *
- * Linux 下使用虚拟地址 addr 直接写入。
- * MMP 驱动已将 DMA buffer mmap 到用户空间，无需 phys_addr 回绕。
- */
-static td_s32 app_write_stream(td_u32 chn, const ot_venc_stream *stream, td_void *user_data)
-{
-    FILE   **fp = (FILE **)user_data;
-    td_u32   i;
-
-    if (stream == TD_NULL || stream->pack == TD_NULL || fp == TD_NULL
-        || fp[chn] == TD_NULL) {
-        return TD_FAILURE;
-    }
-
-    for (i = 0; i < stream->pack_cnt; i++) {
-        (td_void)fwrite(stream->pack[i].addr + stream->pack[i].offset,
-                        stream->pack[i].len - stream->pack[i].offset, 1, fp[chn]);
-        (td_void)fflush(fp[chn]);
-    }
-    return TD_SUCCESS;
-}
 
 /* ===== VB 池配置构建 ===== */
 
@@ -194,6 +168,167 @@ static td_void app_print_banner(td_void)
 }
 
 /* ====================================================================
+ *  VENC 生产线程 — 取编码帧并投递给 dispatcher
+ * ==================================================================== */
+static td_void *producer_thread(td_void *arg)
+{
+    (td_void)arg;
+    thread_set_name("enc_producer");
+
+    while (g_producer_running) {
+        td_u32 chn;
+
+        for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
+            ot_venc_stream stream;
+            td_s32         ret;
+            td_u32         i;
+            size_t         total_size;
+            uint8_t       *buf;
+            frame_t       *f;
+
+            if (!g_producer_running) { break; }
+
+            ret = media_venc_get_frame((ot_venc_chn)chn, 1000, &stream);
+            if (ret != TD_SUCCESS) {
+                if (ret == MEDIA_ERR_VENC_TIMEOUT) { continue; }
+                DBG_WARN("APP", "VENC chn%u get_frame error: 0x%x", chn, ret);
+                break;
+            }
+
+            if (stream.pack_cnt == 0) {
+                (td_void)media_venc_release_frame((ot_venc_chn)chn, &stream);
+                continue;
+            }
+
+            /* 计算所有 pack 总大小 */
+            total_size = 0;
+            for (i = 0; i < stream.pack_cnt; i++) {
+                total_size += stream.pack[i].len - stream.pack[i].offset;
+            }
+
+            /* 拼接为连续 buffer, 创建 frame (深拷贝) */
+            buf = (uint8_t *)malloc(total_size);
+            if (buf) {
+                size_t off = 0;
+                for (i = 0; i < stream.pack_cnt; i++) {
+                    size_t len = stream.pack[i].len - stream.pack[i].offset;
+                    (td_void)memcpy(buf + off,
+                                    stream.pack[i].addr + stream.pack[i].offset,
+                                    len);
+                    off += len;
+                }
+                /* PTS 取首个 pack */
+                int64_t pts = (int64_t)stream.pack[0].pts;
+
+                f = frame_create(buf, total_size, pts);
+                free(buf);
+
+                if (f) {
+                    dispatcher_dispatch(&g_dispatcher, f);
+                }
+            }
+
+            (td_void)media_venc_release_frame((ot_venc_chn)chn, &stream);
+        }
+    }
+
+    DBG_LOG("APP", "producer thread exit");
+    return TD_NULL;
+}
+
+/* ====================================================================
+ *  统计消费线程 — 收帧、计数、定期打印
+ * ==================================================================== */
+static td_void *consumer_thread(td_void *arg)
+{
+    consumer_t *c = (consumer_t *)arg;
+    td_u64      total_frames = 0;
+    td_u64      total_bytes  = 0;
+    td_u64      batch_frames = 0;
+    td_u64      batch_bytes  = 0;
+    FILE       *rec_file     = TD_NULL;
+
+    thread_set_name("enc_consumer");
+
+    while (1) {
+        frame_t *f = consumer_get_frame(c);
+        if (!f) { break; }   /* shutdown */
+
+        total_frames++;
+        total_bytes  += f->size;
+        batch_frames++;
+        batch_bytes  += f->size;
+
+        /* ---- SD 卡录像 ---- */
+        {
+            td_bool mounted = sys_sd_is_mounted();
+
+            if (mounted && rec_file == TD_NULL) {
+                /* SD 卡插入, 以当前时间创建录像文件 */
+                time_t    now = time(TD_NULL);
+                struct tm tm;
+                td_char   fname[64];
+
+                localtime_r(&now, &tm);
+                snprintf(fname, sizeof(fname),
+                         "/mnt/sdcard/%04d%02d%02d_%02d%02d%02d.h264",
+                         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                         tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+                rec_file = fopen(fname, "wb");
+                if (rec_file) {
+                    DBG_LOG("APP", "recording started: %s", fname);
+                } else {
+                    DBG_WARN("APP", "cannot create %s: %s",
+                             fname, strerror(errno));
+                }
+            } else if (!mounted && rec_file != TD_NULL) {
+                /* SD 卡拔出, 关闭录像 */
+                fclose(rec_file);
+                rec_file = TD_NULL;
+                DBG_LOG("APP", "recording stopped (sd removed)");
+            }
+
+            if (rec_file != TD_NULL) {
+                if (fwrite(f->data, 1, f->size, rec_file) != f->size) {
+                    DBG_WARN("APP", "write failed, closing file");
+                    fclose(rec_file);
+                    rec_file = TD_NULL;
+                }
+            }
+        }
+
+        frame_unref(f);
+
+        /* 每 100 帧打一次统计 */
+        if (batch_frames >= 100) {
+            DBG_LOG("APP", "Consumer: %llu frames | %llu KB | avg %.1f KB/frame %s",
+                    (unsigned long long)total_frames,
+                    (unsigned long long)(total_bytes / 1024),
+                    (double)batch_bytes / (double)batch_frames / 1024.0,
+                    (rec_file != TD_NULL) ? "[REC]" : "");
+            batch_frames = 0;
+            batch_bytes  = 0;
+        }
+    }
+
+    /* 退出前关闭录像文件 */
+    if (rec_file != TD_NULL) {
+        fclose(rec_file);
+        rec_file = TD_NULL;
+        DBG_LOG("APP", "recording stopped (exit)");
+    }
+
+    /* 标记线程已退出, consumer_destroy 靠此安全清理 */
+    consumer_mark_exited(c);
+
+    DBG_LOG("APP", "Consumer exit: total %llu frames, %llu KB",
+            (unsigned long long)total_frames,
+            (unsigned long long)(total_bytes / 1024));
+    return TD_NULL;
+}
+
+/* ====================================================================
  *  统一编码流程
  * ==================================================================== */
 static td_s32 app_run(td_void)
@@ -204,11 +339,6 @@ static td_s32 app_run(td_void)
     media_vpss_grp_attr grp_attr;
     media_vpss_chn_attr chn_attr[3];
     media_venc_chn_attr venc_attr[3];
-    FILE               *fp[3] = { TD_NULL, TD_NULL, TD_NULL };
-    td_char             file_name[128];
-    const td_char      *file_names[3];
-    thread_t            stream_thread;
-    media_stream_thread_arg stream_arg;
     td_u32              chn;
 
     /* ---- 1. 组装 VPSS/VENC 属性 ---- */
@@ -259,42 +389,65 @@ static td_s32 app_run(td_void)
     if (ret != TD_SUCCESS) { goto EXIT_IR_DEINIT; }
     DBG_LOG("APP", "IR Auto thread started");
 
-    /* ---- 4. 打开输出文件 ---- */
-    for (chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-        const td_char *ext = (g_chn_cfg[chn].type == OT_PT_H265) ? "h265" : "h264";
-        snprintf(file_name, sizeof(file_name), "%s.%s",
-                 g_chn_cfg[chn].file_prefix, ext);
-        file_names[chn] = file_name;
+    /* ---- 4. 启动 dispatcher 生产者/消费者 ---- */
+    {
+        consumer_t *c;
+        thread_t    prod_thr;
+        thread_t    cons_thr;
+
+        /* 创建统计消费者 (队列无限, 不丢帧) */
+        c = dispatcher_add_consumer(&g_dispatcher, 0, false);
+        if (!c) {
+            DBG_ERROR("APP", "add consumer failed");
+            ret = TD_FAILURE;
+            goto EXIT_IR_STOP;
+        }
+        DBG_LOG("APP", "consumer added, queue=unlimited");
+
+        ret = thread_create(&cons_thr, "enc_consumer", 16384,
+                            consumer_thread, c);
+        if (ret != TD_SUCCESS) {
+            DBG_ERROR("APP", "consumer thread create failed");
+            dispatcher_remove_consumer(&g_dispatcher, c);
+            goto EXIT_IR_STOP;
+        }
+
+        /* 启动生产者 */
+        g_producer_running = TD_TRUE;
+        ret = thread_create(&prod_thr, "enc_producer", 32768,
+                            producer_thread, TD_NULL);
+        if (ret != TD_SUCCESS) {
+            DBG_ERROR("APP", "producer thread create failed");
+            g_producer_running = TD_FALSE;
+            consumer_stop(c);
+            thread_join(cons_thr);
+            dispatcher_remove_consumer(&g_dispatcher, c);
+            goto EXIT_IR_STOP;
+        }
+        DBG_LOG("APP", "producer/consumer threads started");
+
+        /* ---- 5. 等待退出信号 ---- */
+        DBG_LOG("APP", "Running... press Ctrl+C to stop");
+        while (!g_exit_flag) {
+            usleep(100000);
+        }
+
+        DBG_LOG("APP", "Stopping...");
+
+        /* ---- 6. 停止取流线程 ---- */
+        g_producer_running = TD_FALSE;
+        DBG_LOG("APP", "waiting producer thread...");
+        thread_join(prod_thr);
+
+        /* ---- 7. 停止消费线程, 清理消费者 ---- */
+        consumer_stop(c);
+        DBG_LOG("APP", "waiting consumer thread...");
+        thread_join(cons_thr);
+        dispatcher_remove_consumer(&g_dispatcher, c);
     }
-    ret = media_pipeline_stream_init(fp, file_names, APP_VENC_CHN_CNT);
-    if (ret != TD_SUCCESS) { goto EXIT_IR_STOP; }
 
-    /* ---- 5. 启动取流线程 ---- */
-    stream_arg.chn_cnt   = APP_VENC_CHN_CNT;
-    stream_arg.exit_flag = &g_exit_flag;
-    stream_arg.callback  = app_write_stream;
-    stream_arg.user_data = fp;
-
-    ret = thread_create(&stream_thread, "enc_stream", 32768,
-                        media_pipeline_stream_thread, &stream_arg);
-    if (ret != TD_SUCCESS) { goto EXIT_FILE; }
-    DBG_LOG("APP", "Encoding... press Ctrl+C to stop");
-
-    /* ---- 6. 等待退出信号 ---- */
-    while (!g_exit_flag) {
-        usleep(100000);
-    }
-
-    DBG_LOG("APP", "Stopping...");
-
-    /* ---- 7. 等待取流线程结束 ---- */
-    thread_join(stream_thread);
-
-    /* ---- 8. 逆序清理 ---- */
-    media_pipeline_stream_deinit(fp, APP_VENC_CHN_CNT);
-EXIT_FILE:
-    ir_auto_stop();
 EXIT_IR_STOP:
+    ir_auto_stop();
 EXIT_IR_DEINIT:
 EXIT_VIDEO:
     media_pipeline_video_deinit(&vi_cfg, APP_VENC_CHN_CNT);
@@ -317,6 +470,7 @@ int main(int argc, char **argv)
     sys_notify_init();
     sys_uevent_init();
     sys_sd_init();
+    dispatcher_init(&g_dispatcher);
 
     /* 填充 discovery 通道配置 */
     {
@@ -337,6 +491,7 @@ int main(int argc, char **argv)
     {
         td_s32 rc = app_run();
         discovery_serv_deinit();
+        dispatcher_destroy(&g_dispatcher);
         sys_sd_deinit();
         sys_uevent_deinit();
         sys_notify_deinit();

@@ -44,6 +44,7 @@ add_executable(hi3516_project
     ${APP_SRC_DIR}/sys_uevent.c
     ${APP_SRC_DIR}/sys_sd.c
     ${APP_SRC_DIR}/sys_discovery_serv.c
+    ${APP_SRC_DIR}/video_dispatcher.c
 )
 
 # SDK 库列表 (供 STATIC/SHARED 两种链接模式共用)

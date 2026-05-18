@@ -91,11 +91,22 @@ td_s32 dbg_init(td_void)
 #if !DBG_FORCE_STDOUT
     /* 尝试启动 syslogd (-C64: 64KB 环形缓冲) */
     system("syslogd -C64");
-    usleep(100000);  /* 等 syslogd 创建 /dev/log */
+
+    /* 轮询等待 /dev/log 就绪 (最多 1 秒), 避免 100ms 不够用 */
+    {
+        td_s32 retry;
+        for (retry = 0; retry < 20; retry++) {
+            if (access("/dev/log", F_OK) == 0) { break; }
+            usleep(50000);  /* 50ms */
+        }
+    }
 
     /* 检查 syslogd 是否就绪 */
     if (access("/dev/log", F_OK) == 0) {
         openlog("hi3516_project", LOG_PID | LOG_NDELAY, LOG_USER);
+
+        /* openlog 后 syslogd 可能还在初始化 shm 缓冲, 稍等一下再启 logread */
+        usleep(50000);
 
         /* 启动 logread 后台实时输出到终端
          * fork+setsid 放到独立 session, Ctrl+C 打不到它 */
