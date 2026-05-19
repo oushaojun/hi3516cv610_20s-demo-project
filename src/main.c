@@ -405,7 +405,7 @@ static td_s32 app_run(td_void)
             ret = TD_FAILURE;
             goto EXIT_IR_STOP;
         }
-        DBG_LOG("APP", "consumer added, queue=unlimited");
+        DBG_LOG("APP", "consumer added, queue=30");
 
         ret = thread_create(&cons_thr, "enc_consumer", 16384,
                             consumer_thread, c);
