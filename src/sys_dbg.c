@@ -103,6 +103,9 @@ td_s32 dbg_init(td_void)
 
     /* 检查 syslogd 是否就绪 */
     if (access("/dev/log", F_OK) == 0) {
+        /* socket 文件可能刚创建, syslogd 还没进主循环, 等 200ms */
+        usleep(200000);
+
         openlog("hi3516_project", LOG_PID | LOG_NDELAY, LOG_USER);
 
         /* openlog 后 syslogd 可能还在初始化 shm 缓冲, 稍等一下再启 logread */
