@@ -300,8 +300,11 @@ static td_void *consumer_thread(td_void *arg)
 
         frame_unref(f);
 
-        /* 每 100 帧打一次统计 */
+        /* 每 100 帧打一次统计 + fsync 刷盘释放 page cache */
         if (batch_frames >= 100) {
+            if (rec_file != TD_NULL) {
+                fsync(fileno(rec_file));
+            }
             DBG_LOG("APP", "Consumer: %llu frames | %llu KB | avg %.1f KB/frame %s",
                     (unsigned long long)total_frames,
                     (unsigned long long)(total_bytes / 1024),
@@ -395,8 +398,8 @@ static td_s32 app_run(td_void)
         thread_t    prod_thr;
         thread_t    cons_thr;
 
-        /* 创建统计消费者 (队列无限, 不丢帧) */
-        c = dispatcher_add_consumer(&g_dispatcher, 0, false);
+        /* 创建统计消费者 (队列上限 30 帧, 不丢旧帧) */
+        c = dispatcher_add_consumer(&g_dispatcher, 30, false);
         if (!c) {
             DBG_ERROR("APP", "add consumer failed");
             ret = TD_FAILURE;

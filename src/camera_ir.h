@@ -29,10 +29,10 @@ extern "C" {
 
 #define IR_NORMAL_TO_IR_ISO  16000  /**< 亮→暗 ISO 阈值 */
 #define IR_IR_TO_NORMAL_ISO  400    /**< 暗→亮 ISO 阈值 */
-#define IR_RG_MAX            156    /**< IR 场景 R/G 最大值 */
-#define IR_RG_MIN            106    /**< IR 场景 R/G 最小值 */
-#define IR_BG_MAX            158    /**< IR 场景 B/G 最大值 */
-#define IR_BG_MIN            107    /**< IR 场景 B/G 最小值 */
+#define IR_RG_MAX            255    /**< IR 场景 R/G 最大值 (放宽到全范围, 纯ISO驱动) */
+#define IR_RG_MIN            0      /**< IR 场景 R/G 最小值 */
+#define IR_BG_MAX            255    /**< IR 场景 B/G 最大值 (放宽到全范围) */
+#define IR_BG_MIN            0      /**< IR 场景 B/G 最小值 */
 #define IR_DEFAULT_STATUS    0      /**< 初始状态 0=正常(白天) 1=IR(夜晚) */
 
 /** IR 自动线程轮询间隔 (ms) */
