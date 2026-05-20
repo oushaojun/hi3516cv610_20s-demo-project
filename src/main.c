@@ -27,6 +27,7 @@
 #include "sys_uevent.h"
 #include "video_dispatcher.h"
 #include "video_pipeline.h"
+#include "mp4_muxer.h"
 
 /* ===== 应用层全局状态 ===== */
 static volatile td_bool g_exit_flag = TD_FALSE;
@@ -237,16 +238,41 @@ static td_void *producer_thread(td_void *arg)
 }
 
 /* ====================================================================
- *  统计消费线程 — 收帧、计数、定期打印
+ *  统计消费线程 — 收帧、计数、定期打印, SD卡录像封装为MP4
  * ==================================================================== */
+
+/** @brief 检测 H264 Annex B 码流中是否包含 IDR (关键帧) */
+static bool frame_has_idr(const uint8_t *data, size_t size)
+{
+    const uint8_t *end = data + size;
+    const uint8_t *p   = data;
+
+    while (p + 3 <= end) {
+        int sc_len = 0;
+        if (p[0] == 0x00 && p[1] == 0x00) {
+            if (p[2] == 0x01)      { sc_len = 3; }
+            else if (p[2] == 0x00 && p + 3 < end && p[3] == 0x01) { sc_len = 4; }
+        }
+        if (sc_len > 0) {
+            const uint8_t *nal = p + sc_len;
+            if (nal < end && (nal[0] & 0x1F) == NAL_TYPE_IDR)
+                return true;
+            p = nal + 1;
+        } else {
+            p++;
+        }
+    }
+    return false;
+}
+
 static td_void *consumer_thread(td_void *arg)
 {
-    consumer_t *c = (consumer_t *)arg;
-    td_u64      total_frames = 0;
-    td_u64      total_bytes  = 0;
-    td_u64      batch_frames = 0;
-    td_u64      batch_bytes  = 0;
-    FILE       *rec_file     = TD_NULL;
+    consumer_t   *c = (consumer_t *)arg;
+    td_u64        total_frames = 0;
+    td_u64        total_bytes  = 0;
+    td_u64        batch_frames = 0;
+    td_u64        batch_bytes  = 0;
+    mp4_muxer_t  *muxer        = TD_NULL;
 
     thread_set_name("enc_consumer");
 
@@ -259,66 +285,66 @@ static td_void *consumer_thread(td_void *arg)
         batch_frames++;
         batch_bytes  += f->size;
 
-        /* ---- SD 卡录像 ---- */
+        /* ---- SD 卡录像 (MP4封装) ---- */
         {
             td_bool mounted = sys_sd_is_mounted();
 
-            if (mounted && rec_file == TD_NULL) {
-                /* SD 卡插入, 以当前时间创建录像文件 */
+            if (mounted && muxer == TD_NULL) {
+                /* SD 卡插入, 以当前时间创建 MP4 文件 */
                 time_t    now = time(TD_NULL);
                 struct tm tm;
                 td_char   fname[64];
 
                 localtime_r(&now, &tm);
                 snprintf(fname, sizeof(fname),
-                         "/mnt/sdcard/%04d%02d%02d_%02d%02d%02d.h264",
+                         "/mnt/sdcard/%04d%02d%02d_%02d%02d%02d.mp4",
                          tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                          tm.tm_hour, tm.tm_min, tm.tm_sec);
 
-                rec_file = fopen(fname, "wb");
-                if (rec_file) {
+                muxer = mp4_muxer_create(fname,
+                             (uint16_t)APP_VENC0_WIDTH,
+                             (uint16_t)APP_VENC0_HEIGHT,
+                             (uint8_t)APP_VENC0_FPS);
+                if (muxer) {
                     DBG_LOG("APP", "recording started: %s", fname);
                 } else {
-                    DBG_WARN("APP", "cannot create %s: %s",
-                             fname, strerror(errno));
+                    DBG_WARN("APP", "cannot create %s", fname);
                 }
-            } else if (!mounted && rec_file != TD_NULL) {
+            } else if (!mounted && muxer != TD_NULL) {
                 /* SD 卡拔出, 关闭录像 */
-                fclose(rec_file);
-                rec_file = TD_NULL;
+                mp4_muxer_close(muxer);
+                muxer = TD_NULL;
                 DBG_LOG("APP", "recording stopped (sd removed)");
             }
 
-            if (rec_file != TD_NULL) {
-                if (fwrite(f->data, 1, f->size, rec_file) != f->size) {
-                    DBG_WARN("APP", "write failed, closing file");
-                    fclose(rec_file);
-                    rec_file = TD_NULL;
+            if (muxer != TD_NULL) {
+                bool is_key = frame_has_idr(f->data, f->size);
+                if (mp4_muxer_write_frame(muxer, f->data, f->size, is_key) != 0) {
+                    DBG_WARN("APP", "muxer write failed, closing file");
+                    mp4_muxer_close(muxer);
+                    muxer = TD_NULL;
                 }
             }
         }
 
         frame_unref(f);
 
-        /* 每 100 帧打一次统计 + fsync 刷盘释放 page cache */
+        /* 每 100 帧打一次统计 */
         if (batch_frames >= 100) {
-            if (rec_file != TD_NULL) {
-                fsync(fileno(rec_file));
-            }
             DBG_LOG("APP", "Consumer: %llu frames | %llu KB | avg %.1f KB/frame %s",
                     (unsigned long long)total_frames,
                     (unsigned long long)(total_bytes / 1024),
                     (double)batch_bytes / (double)batch_frames / 1024.0,
-                    (rec_file != TD_NULL) ? "[REC]" : "");
+                    (muxer != TD_NULL) ? "[REC]" : "");
             batch_frames = 0;
             batch_bytes  = 0;
         }
     }
 
     /* 退出前关闭录像文件 */
-    if (rec_file != TD_NULL) {
-        fclose(rec_file);
-        rec_file = TD_NULL;
+    if (muxer != TD_NULL) {
+        mp4_muxer_close(muxer);
+        muxer = TD_NULL;
         DBG_LOG("APP", "recording stopped (exit)");
     }
 

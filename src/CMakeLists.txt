@@ -45,6 +45,7 @@ add_executable(hi3516_project
     ${APP_SRC_DIR}/sys_sd.c
     ${APP_SRC_DIR}/sys_discovery_serv.c
     ${APP_SRC_DIR}/video_dispatcher.c
+    ${APP_SRC_DIR}/mp4_muxer.c
 )
 
 # SDK 库列表 (供 STATIC/SHARED 两种链接模式共用)
@@ -152,10 +153,18 @@ target_link_libraries(hi3516_project
     stdc++
 )
 
+# mp4v2: 静态/动态链接切换
+if(LINK_TYPE STREQUAL "STATIC")
+    target_link_libraries(hi3516_project ${CMAKE_SOURCE_DIR}/3rd_party/mp4v2/lib/libmp4v2.a)
+else()
+    target_link_libraries(hi3516_project ${CMAKE_SOURCE_DIR}/3rd_party/mp4v2/lib/libmp4v2.so)
+endif()
+
 target_compile_options(hi3516_project PRIVATE ${HI3516_COMPILE_OPTIONS})
 target_include_directories(hi3516_project PRIVATE
     ${SDK_COMMON_DIR}
     ${SAMPLE_AUDIO_ADP_DIR}
+    ${CMAKE_SOURCE_DIR}/3rd_party/mp4v2/include
 )
 target_compile_definitions(hi3516_project PRIVATE
     SENSOR0_TYPE=${SENSOR0_TYPE}
@@ -167,6 +176,7 @@ set(CLI_OUT  ${CMAKE_BINARY_DIR}/tools/sys_discovery_cli)
 
 add_custom_command(
     OUTPUT ${CLI_OUT}
+    COMMAND mkdir -p ${CMAKE_BINARY_DIR}/tools
     COMMAND gcc -Wall -O2 -o ${CLI_OUT} ${CLI_SRC} -lpthread
     DEPENDS ${CLI_SRC}
     COMMENT "Building sys_discovery_cli (host gcc)..."
