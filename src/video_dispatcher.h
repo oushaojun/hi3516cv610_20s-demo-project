@@ -120,6 +120,27 @@ void consumer_destroy(consumer_t *c);
  */
 void consumer_mark_exited(consumer_t *c);
 
+/**
+ * @brief  获取消费者关联的视频宽度
+ * @param  c  消费者
+ * @return 视频宽度 (像素)
+ */
+uint16_t consumer_get_width(consumer_t *c);
+
+/**
+ * @brief  获取消费者关联的视频高度
+ * @param  c  消费者
+ * @return 视频高度 (像素)
+ */
+uint16_t consumer_get_height(consumer_t *c);
+
+/**
+ * @brief  获取消费者关联的视频帧率
+ * @param  c  消费者
+ * @return 视频帧率
+ */
+uint8_t consumer_get_fps(consumer_t *c);
+
 /*
  * ============================================================================
  *  分发器 (dispatcher_t) — 广播帧到所有注册的消费者
@@ -131,14 +152,20 @@ typedef struct {
     consumer_t    **consumers;   /**< 消费者指针数组 (动态 ×2 扩容) */
     int             count;       /**< 当前消费者数量 */
     int             capacity;    /**< 数组已分配容量 */
+    uint16_t        width;       /**< 视频宽度 (像素), 初始化时配置 */
+    uint16_t        height;      /**< 视频高度 (像素) */
+    uint8_t         fps;         /**< 视频帧率 */
     pthread_mutex_t lock;        /**< 保护 consumers[] 的互斥锁 */
 } dispatcher_t;
 
 /**
  * @brief  初始化分发器 — 零初始化所有成员, 初始化 mutex
- * @param  d  指向栈或堆上的 dispatcher_t
+ * @param  d       指向栈或堆上的 dispatcher_t
+ * @param  width   视频宽度 (像素)
+ * @param  height  视频高度 (像素)
+ * @param  fps     视频帧率
  */
-void dispatcher_init(dispatcher_t *d);
+void dispatcher_init(dispatcher_t *d, uint16_t width, uint16_t height, uint8_t fps);
 
 /**
  * @brief  销毁分发器 — 先 stop 所有消费者, 再逐个 destroy, 释放数组和 lock

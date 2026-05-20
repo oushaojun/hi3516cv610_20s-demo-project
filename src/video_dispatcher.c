@@ -54,6 +54,10 @@ struct consumer_t {
     bool     shutdown;          /**< 停止标志, consumer_get_frame 依此返回 NULL */
     uint64_t dropped_frames;    /**< 丢帧统计 */
 
+    uint16_t width;             /**< 视频宽度 (创建时从 dispatcher 复制) */
+    uint16_t height;            /**< 视频高度 */
+    uint8_t  fps;               /**< 视频帧率 */
+
     /* ---- 安全销毁相关 ---- */
     atomic_int thread_exited;   /**< 消费线程退出时置 1; consumer_destroy 等待此标志 */
 };
@@ -85,6 +89,21 @@ void consumer_mark_exited(consumer_t *c)
 {
     if (!c) return;
     atomic_store(&c->thread_exited, 1);
+}
+
+uint16_t consumer_get_width(consumer_t *c)
+{
+    return c ? c->width : 0;
+}
+
+uint16_t consumer_get_height(consumer_t *c)
+{
+    return c ? c->height : 0;
+}
+
+uint8_t consumer_get_fps(consumer_t *c)
+{
+    return c ? c->fps : 0;
 }
 
 void consumer_destroy(consumer_t *c)
@@ -142,11 +161,14 @@ frame_t *consumer_get_frame(consumer_t *c)
 }
 
 /* ========== 分发器实现 ========== */
-void dispatcher_init(dispatcher_t *d)
+void dispatcher_init(dispatcher_t *d, uint16_t width, uint16_t height, uint8_t fps)
 {
     d->consumers = NULL;
     d->count     = 0;
     d->capacity  = 0;
+    d->width     = width;
+    d->height    = height;
+    d->fps       = fps;
     pthread_mutex_init(&d->lock, NULL);
 }
 
@@ -183,6 +205,11 @@ consumer_t *dispatcher_add_consumer(dispatcher_t *d,
 {
     consumer_t *c = consumer_create(max_len, drop_old);
     if (!c) return NULL;
+
+    /* 从 dispatcher 复制视频参数到 consumer */
+    c->width  = d->width;
+    c->height = d->height;
+    c->fps    = d->fps;
 
     pthread_mutex_lock(&d->lock);
 

@@ -276,9 +276,9 @@ static td_void *consumer_thread(td_void *arg)
                          tm.tm_hour, tm.tm_min, tm.tm_sec);
 
                 muxer = mp4_muxer_create(fname,
-                             (uint16_t)APP_VENC0_WIDTH,
-                             (uint16_t)APP_VENC0_HEIGHT,
-                             (uint8_t)APP_VENC0_FPS);
+                             consumer_get_width(c),
+                             consumer_get_height(c),
+                             consumer_get_fps(c));
                 if (muxer) {
                     DBG_LOG("APP", "recording started: %s", fname);
                 } else {
@@ -488,7 +488,10 @@ int main(int argc, char **argv)
     sys_uevent_init();
     sys_sd_init();
     for (td_u32 chn = 0; chn < APP_VENC_CHN_CNT; chn++) {
-        dispatcher_init(&g_dispatchers[chn]);
+        dispatcher_init(&g_dispatchers[chn],
+                        (uint16_t)g_chn_cfg[chn].width,
+                        (uint16_t)g_chn_cfg[chn].height,
+                        (uint8_t)g_chn_cfg[chn].fps);
     }
 
     /* 填充 discovery 通道配置 */
