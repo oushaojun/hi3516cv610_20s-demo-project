@@ -6,7 +6,7 @@
 #define DESTROY_TIMEOUT_MS  3000
 
 /* ========== 帧操作 ========== */
-frame_t *frame_create(const uint8_t *data, size_t size, int64_t pts)
+frame_t *frame_create(const uint8_t *data, size_t size, int64_t pts, bool is_keyframe)
 {
     frame_t *f = calloc(1, sizeof(*f));
     if (!f) return NULL;
@@ -16,8 +16,9 @@ frame_t *frame_create(const uint8_t *data, size_t size, int64_t pts)
         return NULL;
     }
     memcpy(f->data, data, size);
-    f->size = size;
-    f->pts  = pts;
+    f->size        = size;
+    f->pts         = pts;
+    f->is_keyframe = is_keyframe;
     atomic_init(&f->refcount, 1);
     return f;
 }

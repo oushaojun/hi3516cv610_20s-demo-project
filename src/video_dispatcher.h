@@ -48,17 +48,19 @@ typedef struct {
     uint8_t    *data;        /**< 帧数据缓冲区 (堆分配) */
     size_t      size;        /**< 数据长度 (字节) */
     int64_t     pts;         /**< 呈现时间戳 (微秒), 无时间戳时填 0 */
+    bool        is_keyframe; /**< 是否为 IDR 关键帧 (H264/H265) */
     atomic_int  refcount;    /**< 原子引用计数, 归零时自动释放 data 和 frame */
 } frame_t;
 
 /**
  * @brief  创建帧 — 深拷贝 data, refcount=1
- * @param  data  源数据指针
- * @param  size  数据长度 (字节)
- * @param  pts   呈现时间戳 (微秒), 无时间戳填 0
+ * @param  data        源数据指针
+ * @param  size        数据长度 (字节)
+ * @param  pts         呈现时间戳 (微秒), 无时间戳填 0
+ * @param  is_keyframe 是否为 IDR 关键帧 (H264 ref_type==IDR_SLICE)
  * @return 堆分配的 frame_t*, 失败返回 NULL
  */
-frame_t *frame_create(const uint8_t *data, size_t size, int64_t pts);
+frame_t *frame_create(const uint8_t *data, size_t size, int64_t pts, bool is_keyframe);
 
 /**
  * @brief  原子自增引用计数 (+1)
