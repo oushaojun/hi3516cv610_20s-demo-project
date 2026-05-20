@@ -155,6 +155,7 @@ typedef struct {
     uint16_t        width;       /**< 视频宽度 (像素), 初始化时配置 */
     uint16_t        height;      /**< 视频高度 (像素) */
     uint8_t         fps;         /**< 视频帧率 */
+    int             codec_type;  /**< 编码类型 (OT_PT_H264=96 / OT_PT_H265=265) */
     pthread_mutex_t lock;        /**< 保护 consumers[] 的互斥锁 */
 } dispatcher_t;
 
@@ -165,7 +166,7 @@ typedef struct {
  * @param  height  视频高度 (像素)
  * @param  fps     视频帧率
  */
-void dispatcher_init(dispatcher_t *d, uint16_t width, uint16_t height, uint8_t fps);
+void dispatcher_init(dispatcher_t *d, uint16_t width, uint16_t height, uint8_t fps, int codec_type);
 
 /**
  * @brief  销毁分发器 — 先 stop 所有消费者, 再逐个 destroy, 释放数组和 lock

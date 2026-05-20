@@ -161,14 +161,15 @@ frame_t *consumer_get_frame(consumer_t *c)
 }
 
 /* ========== 分发器实现 ========== */
-void dispatcher_init(dispatcher_t *d, uint16_t width, uint16_t height, uint8_t fps)
+void dispatcher_init(dispatcher_t *d, uint16_t width, uint16_t height, uint8_t fps, int codec_type)
 {
-    d->consumers = NULL;
-    d->count     = 0;
-    d->capacity  = 0;
-    d->width     = width;
-    d->height    = height;
-    d->fps       = fps;
+    d->consumers  = NULL;
+    d->count      = 0;
+    d->capacity   = 0;
+    d->width      = width;
+    d->height     = height;
+    d->fps        = fps;
+    d->codec_type = codec_type;
     pthread_mutex_init(&d->lock, NULL);
 }
 

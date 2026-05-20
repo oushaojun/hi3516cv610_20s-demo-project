@@ -109,7 +109,12 @@ static td_void *producer_thread(td_void *arg)
             }
             /* PTS 取首个 pack */
             int64_t pts = (int64_t)stream.pack[0].pts;
-            bool    is_key = (stream.h264_info.ref_type == OT_VENC_BASE_IDR_SLICE);
+            bool is_key;
+            if (ctx->dispatchers[chn].codec_type == OT_PT_H264) {
+                is_key = (stream.h264_info.ref_type == OT_VENC_BASE_IDR_SLICE);
+            } else {
+                is_key = (stream.h265_info.ref_type == OT_VENC_BASE_IDR_SLICE);
+            }
 
             f = frame_create(buf, total_size, pts, is_key);
             free(buf);
@@ -256,7 +261,8 @@ video_record_ctx_t *video_record_init(const video_record_chn_cfg_t *cfgs,
         dispatcher_init(&ctx->dispatchers[i],
                         cfgs[i].width,
                         cfgs[i].height,
-                        cfgs[i].fps);
+                        cfgs[i].fps,
+                        cfgs[i].codec_type);
 
         /* 仅 H.264 / H.265 创建 consumer, 其他类型跳过 */
         if (cfgs[i].codec_type != OT_PT_H264 && cfgs[i].codec_type != OT_PT_H265) {
