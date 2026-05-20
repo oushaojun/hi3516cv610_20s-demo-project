@@ -37,6 +37,7 @@ set(APP_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(hi3516_project
     ${APP_SRC_DIR}/main.c
     ${APP_SRC_DIR}/video_pipeline.c
+    ${APP_SRC_DIR}/video_record.c
     ${APP_SRC_DIR}/camera_ir.c
     ${APP_SRC_DIR}/sys_dbg.c
     ${APP_SRC_DIR}/sys_thread.c
