@@ -275,10 +275,11 @@ int main(int argc, char **argv)
 
     /* 从通道配置表构建录像模块配置 */
     for (i = 0; i < APP_VENC_CHN_CNT; i++) {
-        vr_cfgs[i].width     = (uint16_t)g_chn_cfg[i].width;
-        vr_cfgs[i].height    = (uint16_t)g_chn_cfg[i].height;
-        vr_cfgs[i].fps       = (uint8_t)g_chn_cfg[i].fps;
-        vr_cfgs[i].max_queue = 30;
+        vr_cfgs[i].width      = (uint16_t)g_chn_cfg[i].width;
+        vr_cfgs[i].height     = (uint16_t)g_chn_cfg[i].height;
+        vr_cfgs[i].fps        = (uint8_t)g_chn_cfg[i].fps;
+        vr_cfgs[i].max_queue  = 30;
+        vr_cfgs[i].codec_type = (int)g_chn_cfg[i].type;
     }
 
     vr = video_record_init(vr_cfgs, APP_VENC_CHN_CNT);

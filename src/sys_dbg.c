@@ -108,9 +108,6 @@ td_s32 dbg_init(td_void)
 
         openlog("hi3516_project", LOG_PID | LOG_NDELAY, LOG_USER);
 
-        /* openlog 后 syslogd 可能还在初始化 shm 缓冲, 稍等一下再启 logread */
-        usleep(50000);
-
         /* 启动 logread 后台实时输出到终端
          * fork+setsid 放到独立 session, Ctrl+C 打不到它 */
         {
@@ -120,6 +117,8 @@ td_s32 dbg_init(td_void)
                 execl("/sbin/logread", "logread", "-f", (td_char *)TD_NULL);
                 _exit(1);
             }
+            /*wait for logread to start*/
+            usleep(50000);
         }
 
         g_use_syslog = TD_TRUE;

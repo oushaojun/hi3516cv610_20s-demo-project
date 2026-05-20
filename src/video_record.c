@@ -251,13 +251,19 @@ video_record_ctx_t *video_record_init(const video_record_chn_cfg_t *cfgs,
 
     ctx->chn_cnt = chn_cnt;
 
-    /* 为每个通道创建 dispatcher + consumer */
+    /* 为每个通道创建 dispatcher (全部初始化, mutex 需要有效) */
     for (i = 0; i < chn_cnt; i++) {
-        /* 初始化 dispatcher */
         dispatcher_init(&ctx->dispatchers[i],
                         cfgs[i].width,
                         cfgs[i].height,
                         cfgs[i].fps);
+
+        /* 仅 H.264 / H.265 创建 consumer, 其他类型跳过 */
+        if (cfgs[i].codec_type != OT_PT_H264 && cfgs[i].codec_type != OT_PT_H265) {
+            DBG_LOG("VREC", "chn%d: skipped (codec_type=%d)", i, cfgs[i].codec_type);
+            ctx->consumers[i] = TD_NULL;
+            continue;
+        }
 
         /* 添加 consumer 订阅该通道 */
         ctx->consumers[i] = dispatcher_add_consumer(&ctx->dispatchers[i],
@@ -267,9 +273,11 @@ video_record_ctx_t *video_record_init(const video_record_chn_cfg_t *cfgs,
             /* 逆序清理已创建的 */
             while (i > 0) {
                 i--;
-                dispatcher_remove_consumer(&ctx->dispatchers[i],
-                                           ctx->consumers[i]);
-                ctx->consumers[i] = TD_NULL;
+                if (ctx->consumers[i]) {
+                    dispatcher_remove_consumer(&ctx->dispatchers[i],
+                                               ctx->consumers[i]);
+                    ctx->consumers[i] = TD_NULL;
+                }
             }
             free(ctx);
             return TD_NULL;
@@ -290,12 +298,17 @@ int video_record_start(video_record_ctx_t *ctx)
 {
     int i;
     int ret;
+    int started = 0;
 
     if (!ctx) { return -1; }
 
-    /* 启动 producer 线程 (每通道一个) */
+    /* 启动 producer 线程 (仅 H.264/H.265 通道) */
     for (i = 0; i < ctx->chn_cnt; i++) {
-        prod_thread_arg_t *a = (prod_thread_arg_t *)malloc(sizeof(*a));
+        prod_thread_arg_t *a;
+
+        if (!ctx->consumers[i]) { continue; }
+
+        a = (prod_thread_arg_t *)malloc(sizeof(*a));
         if (!a) {
             DBG_ERROR("VREC", "chn%d malloc prod arg failed", i);
             goto ERR_PRODUCER;
@@ -317,11 +330,15 @@ int video_record_start(video_record_ctx_t *ctx)
             free(a);
             goto ERR_PRODUCER;
         }
+        started++;
     }
 
-    /* 启动 consumer 线程 (每通道一个) */
+    /* 启动 consumer 线程 (仅 H.264/H.265 通道) */
     for (i = 0; i < ctx->chn_cnt; i++) {
         td_char name[16];
+
+        if (!ctx->consumers[i]) { continue; }
+
         snprintf(name, sizeof(name), "enc_cons%d", i);
         ret = thread_create(&ctx->cons_threads[i], name, 16384,
                             consumer_thread, &ctx->cons_args[i]);
@@ -331,10 +348,14 @@ int video_record_start(video_record_ctx_t *ctx)
             {
                 int j;
                 for (j = 0; j < i; j++) {
-                    consumer_stop(ctx->consumers[j]);
+                    if (ctx->consumers[j]) {
+                        consumer_stop(ctx->consumers[j]);
+                    }
                 }
                 for (j = 0; j < i; j++) {
-                    thread_join(ctx->cons_threads[j]);
+                    if (ctx->consumers[j]) {
+                        thread_join(ctx->cons_threads[j]);
+                    }
                 }
             }
             goto ERR_CONSUMER;
@@ -342,7 +363,7 @@ int video_record_start(video_record_ctx_t *ctx)
     }
 
     DBG_LOG("VREC", "%d producer(s) + %d consumer(s) started",
-            ctx->chn_cnt, ctx->chn_cnt);
+            started, started);
     return 0;
 
 ERR_CONSUMER:
@@ -382,27 +403,33 @@ int video_record_stop(video_record_ctx_t *ctx)
 
     if (!ctx) { return -1; }
 
-    DBG_LOG("VREC", "stopping %d producer(s)...", ctx->chn_cnt);
+    DBG_LOG("VREC", "stopping producers...");
 
     /* 1. 置所有 producer 运行标志为 false */
     for (i = 0; i < ctx->chn_cnt; i++) {
-        ctx->producer_running[i] = TD_FALSE;
+        if (ctx->consumers[i]) {
+            ctx->producer_running[i] = TD_FALSE;
+        }
     }
 
-    /* 2. join 所有 producer */
+    /* 2. join 已启动的 producer */
     for (i = 0; i < ctx->chn_cnt; i++) {
+        if (!ctx->consumers[i]) { continue; }
         DBG_LOG("VREC", "waiting producer chn%d...", i);
         thread_join(ctx->prod_threads[i]);
     }
 
-    /* 3. stop 所有 consumer */
-    DBG_LOG("VREC", "stopping %d consumer(s)...", ctx->chn_cnt);
+    /* 3. stop 已启动的 consumer */
+    DBG_LOG("VREC", "stopping consumers...");
     for (i = 0; i < ctx->chn_cnt; i++) {
-        consumer_stop(ctx->consumers[i]);
+        if (ctx->consumers[i]) {
+            consumer_stop(ctx->consumers[i]);
+        }
     }
 
-    /* 4. join 所有 consumer */
+    /* 4. join 已启动的 consumer */
     for (i = 0; i < ctx->chn_cnt; i++) {
+        if (!ctx->consumers[i]) { continue; }
         DBG_LOG("VREC", "waiting consumer chn%d...", i);
         thread_join(ctx->cons_threads[i]);
     }

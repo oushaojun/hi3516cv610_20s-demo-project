@@ -44,6 +44,7 @@ typedef struct {
     uint16_t height;     /**< 视频高度 (像素) */
     uint8_t  fps;        /**< 视频帧率 */
     int      max_queue;  /**< consumer 队列最大帧数 */
+    int      codec_type; /**< 编码类型 (OT_PT_H264=96 / OT_PT_H265=265), 非此二值跳过录像 */
 } video_record_chn_cfg_t;
 
 /* ====================================================================
