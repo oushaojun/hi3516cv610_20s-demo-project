@@ -44,6 +44,7 @@ add_executable(hi3516_project
     ${APP_SRC_DIR}/sys_notify.c
     ${APP_SRC_DIR}/sys_uevent.c
     ${APP_SRC_DIR}/sys_sd.c
+    ${APP_SRC_DIR}/sys_system.c
     ${APP_SRC_DIR}/sys_discovery_serv.c
     ${APP_SRC_DIR}/video_dispatcher.c
     ${APP_SRC_DIR}/mp4_muxer.c

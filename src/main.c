@@ -26,6 +26,7 @@
 #include "sys_uevent.h"
 #include "video_pipeline.h"
 #include "video_record.h"
+#include "sys_system.h"
 
 /* ===== 应用层全局状态 ===== */
 static volatile td_bool g_exit_flag = TD_FALSE;
@@ -165,6 +166,49 @@ static td_void app_print_banner(td_void)
 }
 
 /* ====================================================================
+ *  系统监控循环 — 每 3s 打印内存/CPU, 低于阈值触发 drop_caches
+ * ==================================================================== */
+static td_void app_monitor_loop(td_void)
+{
+    td_u32 min_free_kb = 0;
+    td_u32 drop_threshold;
+    td_s32 tick = 0;
+
+    (td_void)sys_system_get_min_free_kbytes(&min_free_kb);
+    drop_threshold = (td_u32)((double)min_free_kb * 1.25 * 2.0);
+    DBG_LOG("APP", "min_free_kbytes=%u, drop_cache_threshold=%u KB",
+            min_free_kb, drop_threshold);
+
+    DBG_LOG("APP", "Running... press Ctrl+C to stop");
+    while (!g_exit_flag) {
+        usleep(100000);  /* 100ms */
+
+        tick++;
+        if (tick >= 30) {  /* 每 3 秒 */
+            td_u32  mem_avail = 0;
+            double  cpu_usage = 0.0;
+
+            tick = 0;
+            if (sys_system_get_mem_available(&mem_avail) == 0) {
+                (td_void)sys_system_get_cpu_usage(&cpu_usage);
+                DBG_LOG("APP", "mem_avail=%u KB, cpu=%.1f%%",
+                        mem_avail, cpu_usage);
+
+                if (mem_avail < drop_threshold) {
+                    DBG_WARN("APP", "mem_avail=%u < threshold=%u, drop_caches(all)",
+                             mem_avail, drop_threshold);
+                    (td_void)sys_system_drop_cache(3);
+                }
+            } else {
+                double cpu_usage = 0.0;
+                (td_void)sys_system_get_cpu_usage(&cpu_usage);
+                DBG_LOG("APP", "cpu=%.1f%%", cpu_usage);
+            }
+        }
+    }
+}
+
+/* ====================================================================
  *  统一编码流程
  * ==================================================================== */
 static td_s32 app_run(video_record_ctx_t *vr)
@@ -233,11 +277,8 @@ static td_s32 app_run(video_record_ctx_t *vr)
     }
     DBG_LOG("APP", "recording started");
 
-    /* ---- 5. 等待退出信号 ---- */
-    DBG_LOG("APP", "Running... press Ctrl+C to stop");
-    while (!g_exit_flag) {
-        usleep(100000);
-    }
+    /* ---- 5. 系统监控循环 ---- */
+    app_monitor_loop();
 
     DBG_LOG("APP", "Stopping...");
 
