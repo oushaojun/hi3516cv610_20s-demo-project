@@ -327,7 +327,7 @@ int video_record_start(video_record_ctx_t *ctx)
         {
             td_char name[16];
             snprintf(name, sizeof(name), "enc_prod%d", i);
-            ret = thread_create(&ctx->prod_threads[i], name, 32768,
+            ret = thread_create(&ctx->prod_threads[i], name, 16384,
                                 producer_thread, a);
         }
         if (ret != TD_SUCCESS) {
@@ -346,7 +346,7 @@ int video_record_start(video_record_ctx_t *ctx)
         if (!ctx->consumers[i]) { continue; }
 
         snprintf(name, sizeof(name), "enc_cons%d", i);
-        ret = thread_create(&ctx->cons_threads[i], name, 16384,
+        ret = thread_create(&ctx->cons_threads[i], name, 32768,
                             consumer_thread, &ctx->cons_args[i]);
         if (ret != TD_SUCCESS) {
             DBG_ERROR("VREC", "chn%d consumer thread create failed", i);
