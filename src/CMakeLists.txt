@@ -48,6 +48,7 @@ add_executable(hi3516_project
     ${APP_SRC_DIR}/sys_discovery_serv.c
     ${APP_SRC_DIR}/video_dispatcher.c
     ${APP_SRC_DIR}/mp4_muxer.c
+    ${APP_SRC_DIR}/video_osd.c
 )
 
 # SDK 库列表 (供 STATIC/SHARED 两种链接模式共用)

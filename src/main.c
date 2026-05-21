@@ -27,6 +27,7 @@
 #include "video_pipeline.h"
 #include "video_record.h"
 #include "sys_system.h"
+#include "video_osd.h"
 
 /* ===== 应用层全局状态 ===== */
 static volatile td_bool g_exit_flag = TD_FALSE;
@@ -99,6 +100,9 @@ static const app_chn_cfg_t g_chn_cfg[3] = {
 
 /* 供 discovery 模块使用的通道配置摘要 */
 static discovery_chn_cfg_t g_disc_cfg[3];
+
+/* 时间戳 OSD 实例 (每通道一个, 自带刷新线程) */
+static time_osd_t *g_time_osd[3];
 
 /* ===== VB 池配置构建 ===== */
 
@@ -209,6 +213,37 @@ static td_void app_monitor_loop(td_void)
 }
 
 /* ====================================================================
+ *  OSD 初始化和销毁
+ * ==================================================================== */
+static td_void app_osd_init(td_void)
+{
+    td_u32 i;
+
+    for (i = 0; i < APP_VENC_CHN_CNT; i++) {
+        td_u32 scale = g_chn_cfg[i].width / 640;
+        if (scale < 1) scale = 1;
+        if (scale > 4) scale = 4;
+        g_time_osd[i] = time_osd_create(
+            0, i, i, 0, 0, (uint8_t)scale, osd_rgb(255, 255, 255));
+        if (g_time_osd[i]) {
+            DBG_LOG("APP", "time OSD chn%u OK (scale=%u)", i, scale);
+        }
+    }
+}
+
+static td_void app_osd_deinit(td_void)
+{
+    td_u32 i;
+
+    for (i = 0; i < APP_VENC_CHN_CNT; i++) {
+        if (g_time_osd[i]) {
+            time_osd_destroy(g_time_osd[i]);
+            g_time_osd[i] = NULL;
+        }
+    }
+}
+
+/* ====================================================================
  *  统一编码流程
  * ==================================================================== */
 static td_s32 app_run(video_record_ctx_t *vr)
@@ -260,6 +295,9 @@ static td_s32 app_run(video_record_ctx_t *vr)
     }
     DBG_LOG("APP", "Pipeline video init OK");
 
+    /* ---- 2.5 OSD 叠加层 ---- */
+    app_osd_init();
+
     /* ---- 3. IR Auto ---- */
     ret = ir_auto_init(0);
     if (ret != TD_SUCCESS) { goto EXIT_VIDEO; }
@@ -289,6 +327,7 @@ EXIT_IR_STOP:
     ir_auto_stop();
 EXIT_IR_DEINIT:
 EXIT_VIDEO:
+    app_osd_deinit();
     media_pipeline_video_deinit(&vi_cfg, APP_VENC_CHN_CNT);
 
     if (ret == TD_SUCCESS) {
