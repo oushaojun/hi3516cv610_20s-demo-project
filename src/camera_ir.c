@@ -355,7 +355,7 @@ td_s32 ir_auto_start(td_void)
 
     g_ir_running = 1;
 
-    td_s32 ret = thread_create(&g_ir_thread, "ir_auto", 16384,
+    td_s32 ret = thread_create(&g_ir_thread, "ir_auto", 8192,
                                ir_auto_thread_func, NULL);
     if (ret != TD_SUCCESS) {
         g_ir_running = 0;

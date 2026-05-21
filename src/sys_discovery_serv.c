@@ -582,7 +582,7 @@ td_s32 discovery_serv_init(const discovery_chn_cfg_t *chn_cfg, td_u32 chn_cnt)
 
     /* 6. 启动监听线程 */
     g_running = TD_TRUE;
-    if (thread_create(&g_thread, "discovery", 32768,
+    if (thread_create(&g_thread, "discovery", 16*1024,
                       discovery_thread, NULL) != TD_SUCCESS) {
         DBG_ERROR("DISC", "thread_create failed");
         g_running = TD_FALSE;

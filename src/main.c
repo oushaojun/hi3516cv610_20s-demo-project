@@ -319,7 +319,7 @@ int main(int argc, char **argv)
         vr_cfgs[i].width      = (uint16_t)g_chn_cfg[i].width;
         vr_cfgs[i].height     = (uint16_t)g_chn_cfg[i].height;
         vr_cfgs[i].fps        = (uint8_t)g_chn_cfg[i].fps;
-        vr_cfgs[i].max_queue  = 30;
+        vr_cfgs[i].max_queue  = 15;
         vr_cfgs[i].codec_type = (int)g_chn_cfg[i].type;
     }
 
