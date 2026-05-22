@@ -64,7 +64,8 @@ static int osd_clear(osd_ctx_t *ctx);
 static int osd_draw_rect(osd_ctx_t *ctx, uint16_t x, uint16_t y,
                           uint16_t w, uint16_t h, uint8_t thickness, osd_color_t color);
 static int osd_draw_text(osd_ctx_t *ctx, int16_t x, int16_t y,
-                          const char *text, osd_color_t color, uint8_t scale);
+                          const char *text, osd_color_t color, osd_color_t shadow_color,
+                          uint8_t scale);
 static int osd_draw_bitmap(osd_ctx_t *ctx, int16_t x, int16_t y,
                             const uint16_t *data, uint16_t w, uint16_t h);
 static int osd_show(osd_ctx_t *ctx);
@@ -469,7 +470,8 @@ static int osd_draw_rect(osd_ctx_t *ctx, uint16_t x, uint16_t y,
 }
 
 static int osd_draw_text(osd_ctx_t *ctx, int16_t x, int16_t y,
-                  const char *text, osd_color_t color, uint8_t scale)
+                  const char *text, osd_color_t color, osd_color_t shadow_color,
+                  uint8_t scale)
 {
     const char *p;
     int col, row;
@@ -497,6 +499,25 @@ static int osd_draw_text(osd_ctx_t *ctx, int16_t x, int16_t y,
 
         const uint8_t *glyph = g_font_8x16[ch - 32];
 
+        /* 第一遍: 阴影 (右下偏移 scale 像素) */
+        if (shadow_color != 0) {
+            for (row = 0; row < 16; row++) {
+                uint8_t bits = glyph[row];
+                for (col = 0; col < 8; col++) {
+                    if (!(bits & (0x80 >> col))) continue;
+                    for (sy = 0; sy < (int)scale; sy++) {
+                        for (sx = 0; sx < (int)scale; sx++) {
+                            osd_set_pixel(ctx,
+                                cx + (col + 1) * scale + sx,
+                                cy + (row + 1) * scale + sy,
+                                shadow_color);
+                        }
+                    }
+                }
+            }
+        }
+
+        /* 第二遍: 前景文字 */
         for (row = 0; row < 16; row++) {
             uint8_t bits = glyph[row];
             for (col = 0; col < 8; col++) {
@@ -566,6 +587,7 @@ struct time_osd_ctx {
     thread_t    thread;
     uint8_t     scale;
     osd_color_t color;
+    osd_color_t shadow_color;
     volatile int running;
 };
 
@@ -607,7 +629,8 @@ static void *time_osd_thread(void *arg)
 
 time_osd_t *time_osd_create(uint8_t venc_dev, uint8_t venc_chn,
                              uint8_t handle, uint16_t x, uint16_t y,
-                             uint8_t scale, osd_color_t color)
+                             uint8_t scale, osd_color_t color,
+                             osd_color_t shadow_color)
 {
     osd_cfg_t   cfg;
     time_osd_t *t;
@@ -637,9 +660,10 @@ time_osd_t *time_osd_create(uint8_t venc_dev, uint8_t venc_chn,
         return NULL;
     }
 
-    t->scale   = scale;
-    t->color   = color;
-    t->running = 1;
+    t->scale        = scale;
+    t->color        = color;
+    t->shadow_color = shadow_color;
+    t->running      = 1;
 
     /* 先画一帧初始时间 */
     time_osd_update(t);
@@ -685,7 +709,7 @@ int time_osd_update(time_osd_t *ctx)
              tm.tm_hour, tm.tm_min, tm.tm_sec);
 
     osd_clear(ctx->osd);
-    osd_draw_text(ctx->osd, 0, 0, buf, ctx->color, ctx->scale);
+    osd_draw_text(ctx->osd, 0, 0, buf, ctx->color, ctx->shadow_color, ctx->scale);
     return osd_update(ctx->osd);
 }
 

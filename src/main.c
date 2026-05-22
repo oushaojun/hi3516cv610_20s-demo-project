@@ -238,7 +238,7 @@ static td_void app_osd_init(td_void)
         if (scale < 1) scale = 1;
         if (scale > 4) scale = 4;
         g_time_osd[i] = time_osd_create(
-            0, i, i, 0, 0, (uint8_t)scale, osd_rgb(255, 255, 255));
+            0, i, i, 0, 0, (uint8_t)scale, osd_rgb(255, 255, 255), osd_rgb(0, 0, 0));
         if (g_time_osd[i]) {
             DBG_LOG("APP", "time OSD chn%u OK (scale=%u)", i, scale);
         }

@@ -52,17 +52,19 @@ osd_color_t osd_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
 /**
  * @brief  创建时间戳 OSD 并启动后台刷新线程
- * @param  venc_dev  VENC device (通常为 0)
- * @param  venc_chn  VENC channel 编号
- * @param  handle    RGN handle 0-7, 同一通道上多个实例需不同 handle
- * @param  x,y       叠加在视频帧上的像素坐标 (左上角)
- * @param  scale     字体放大倍数 1-4 (8x16 基础点阵)
- * @param  color     文字颜色 (osd_rgb 构造)
+ * @param  venc_dev     VENC device (通常为 0)
+ * @param  venc_chn     VENC channel 编号
+ * @param  handle       RGN handle 0-7, 同一通道上多个实例需不同 handle
+ * @param  x,y          叠加在视频帧上的像素坐标 (左上角)
+ * @param  scale        字体放大倍数 1-4 (8x16 基础点阵)
+ * @param  color        文字颜色 (osd_rgb 构造)
+ * @param  shadow_color 阴影颜色 (osd_rgb 构造, 传 0 则不显示阴影)
  * @return 成功返回非空指针, 失败返回 NULL; 需用 time_osd_destroy 销毁
  */
 time_osd_t* time_osd_create(uint8_t venc_dev, uint8_t venc_chn,
                              uint8_t handle, uint16_t x, uint16_t y,
-                             uint8_t scale, osd_color_t color);
+                             uint8_t scale, osd_color_t color,
+                             osd_color_t shadow_color);
 
 /**
  * @brief  销毁时间戳 OSD (先停刷新线程, 再解绑 RGN, 最后释放内存)
