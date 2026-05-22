@@ -89,8 +89,8 @@ static td_void time_now_ms(td_char *out, td_s32 size)
 td_s32 dbg_init(td_void)
 {
 #if !DBG_FORCE_STDOUT
-    /* 尝试启动 syslogd (-C64: 64KB 环形缓冲) */
-    system("syslogd -C64");
+    /* 尝试启动 syslogd (-C64: 32KB 环形缓冲) */
+    system("syslogd -C32");
 
     /* 轮询等待 /dev/log 就绪 (最多 1 秒), 避免 100ms 不够用 */
     {
