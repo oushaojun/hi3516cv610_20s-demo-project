@@ -194,13 +194,27 @@ static td_void app_monitor_loop(td_void)
 
             tick = 0;
             if (sys_system_get_mem_available(&mem_avail) == 0) {
-                (td_void)sys_system_get_cpu_usage(&cpu_usage);
-                DBG_LOG("APP", "mem_avail=%u KB, cpu=%.1f%%",
-                        mem_avail, cpu_usage);
+                td_u32 highatomic = 0;
+                td_u32 avail_eff   = mem_avail;
 
-                if (mem_avail < drop_threshold) {
-                    DBG_WARN("APP", "mem_avail=%u < threshold=%u, drop_caches(all)",
-                             mem_avail, drop_threshold);
+                /* 扣除 reserved_highatomic, 避免 free 虚高导致
+                 * drop_caches 阈值判断失准 (32MB OS 下可达 4MB) */
+                if (sys_system_get_reserved_highatomic(&highatomic) == 0
+                    && highatomic > 0) {
+                    if (mem_avail > highatomic) {
+                        avail_eff = mem_avail - highatomic;
+                    } else {
+                        avail_eff = 0;
+                    }
+                }
+
+                (td_void)sys_system_get_cpu_usage(&cpu_usage);
+                DBG_LOG("APP", "mem_avail=%u KB (eff=%u, highatomic=%u), cpu=%.1f%%",
+                        mem_avail, avail_eff, highatomic, cpu_usage);
+
+                if (avail_eff < drop_threshold) {
+                    DBG_WARN("APP", "eff_avail=%u < threshold=%u, drop_caches(all)",
+                             avail_eff, drop_threshold);
                     (td_void)sys_system_drop_cache(3);
                 }
             } else {

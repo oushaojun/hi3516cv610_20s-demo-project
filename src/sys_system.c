@@ -117,6 +117,35 @@ td_s32 sys_system_get_mem_available(td_u32 *kb)
 }
 
 /* ====================================================================
+ *  reserved_highatomic 查询 (从 /proc/zoneinfo 汇总所有 zone)
+ *  zoneinfo 中单位为 pages, 返回时转为 KB (PAGE_SIZE=4KB)
+ * ==================================================================== */
+
+td_s32 sys_system_get_reserved_highatomic(td_u32 *kb)
+{
+    FILE  *fp;
+    td_char line[128];
+    td_u32 total_pages = 0;
+
+    if (!kb) { return -1; }
+
+    fp = fopen("/proc/zoneinfo", "r");
+    if (!fp) { return -1; }
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        td_u32 pages;
+        /* 格式: "        reserved_highatomic      1024" */
+        if (sscanf(line, " reserved_highatomic %u", &pages) == 1) {
+            total_pages += pages;
+        }
+    }
+    fclose(fp);
+
+    *kb = total_pages * 4;  /* pages -> KB */
+    return 0;
+}
+
+/* ====================================================================
  *  CPU 使用率 — 两次 /proc/stat 采样取差值 (间隔 1 秒)
  * ==================================================================== */
 

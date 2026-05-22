@@ -76,6 +76,17 @@ td_s32 sys_system_set_vfs_cache_pressure(td_u32 val);
 td_s32 sys_system_get_mem_available(td_u32 *kb);
 
 /**
+ * @brief  查询 reserved_highatomic (从 /proc/zoneinfo 汇总, 单位 KB)
+ *
+ * 该值表示内核为 GFP_ATOMIC 分配预留的不可被普通分配使用的内存。
+ * 在内存紧张时可能累积数 MB, 导致 mem_avail 虚高。
+ *
+ * @param  kb  输出: reserved_highatomic 总量 (KB)
+ * @return 0 成功, -1 失败
+ */
+td_s32 sys_system_get_reserved_highatomic(td_u32 *kb);
+
+/**
  * @brief  查询 CPU 使用率 (两次 /proc/stat 采样, 间隔 1 秒取差值)
  *
  * 内部 usleep(1000000) 阻塞 1 秒采样。
