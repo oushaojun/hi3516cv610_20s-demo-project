@@ -6,7 +6,7 @@
 
 目前支持：
 
-1. 两路码流，h264 1920x1080@15fps ，h264 640x360@25fps
+1. 两路码流，h264 1920*1080@15fps ，h264 640*360@25fps
 
 2. auto ir
 
@@ -28,7 +28,7 @@
 
 ## 软件环境：
 
-## 1 build system
+### 1 build system
 
 Linux topeet 6.8.0-111-generic #111~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 14 17:13:45 UTC  x86_64 x86_64 x86_64 GNU/Linux
 
