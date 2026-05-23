@@ -1,4 +1,4 @@
-# a demo project for hisi hi3516cv610_20s
+# a demo linux project for hisi hi3516cv610_20s
 
 
 
